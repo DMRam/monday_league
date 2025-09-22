@@ -1,170 +1,426 @@
-import React, { useState } from 'react';
-import { FaVolleyballBall, FaEnvelope, FaLock, FaGoogle, FaFacebook } from 'react-icons/fa';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+    FaVolleyballBall, FaUsers, FaUser, FaLock, FaEye, FaEyeSlash,
+    FaCalendarAlt, FaChartBar, FaGlobe, FaTimes, FaInfoCircle
+} from "react-icons/fa";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../services/firebase";
+import type { TeamUser } from "../interfaces/User";
+import { useAuth } from '../contexts/AuthContext';
 
 export const Login = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [lang, setLang] = useState<"en" | "fr">(() => {
+        const browserLang = navigator.language.split('-')[0];
+        return (browserLang === 'fr' || localStorage.getItem('preferredLang') === 'fr') ? 'fr' : 'en';
+    });
+    const { login } = useAuth();
+
+
+    const t = {
+        en: {
+            title: "Volleyball League",
+            subtitle: "Sign in to access your team dashboard",
+            team: "Team Name",
+            player: "Player Name",
+            password: "Password",
+            signin: "Sign In",
+            welcome: "Welcome to the League",
+            description: "Access your team's dashboard, manage players, view schedules, and track statistics.",
+            playerMgmt: "Player Management",
+            schedule: "Schedule & Events",
+            stats: "Statistics & Analytics",
+            invalid: "Invalid credentials. Please try again.",
+            forgotPassword: "Forgot Password?",
+            rememberMe: "Remember me",
+            newUser: "New to the league?",
+            register: "Register your team",
+            loading: "Authenticating...",
+            or: "or",
+            features: "League Features",
+            contactAdmin: "Please contact the league administrator to reset your password",
+            adminContact: "Contact Administrator",
+            supportMessage: "If you're having trouble accessing your account, please reach out to your league administrator for assistance with password reset.",
+        },
+        fr: {
+            title: "Ligue de Volleyball Séminaire de Sherbrooke",
+            subtitle: "Connectez-vous pour accéder au tableau de votre équipe",
+            team: "Nom d'équipe",
+            player: "Nom du joueur",
+            password: "Mot de passe",
+            signin: "Se connecter",
+            welcome: "Bienvenue dans la Ligue",
+            description: "Accédez au tableau de votre équipe, gérez les joueurs, consultez les horaires et suivez les statistiques.",
+            playerMgmt: "Gestion des joueurs",
+            schedule: "Horaire & Événements",
+            stats: "Statistiques & Analyses",
+            invalid: "Identifiants invalides. Veuillez réessayer.",
+            forgotPassword: "Mot de passe oublié?",
+            rememberMe: "Se souvenir de moi",
+            newUser: "Nouveau dans la ligue?",
+            register: "Inscrivez votre équipe",
+            loading: "Authentification...",
+            or: "ou",
+            features: "Fonctionnalités de la Ligue",
+            contactAdmin: "Veuillez contacter l'administrateur de la ligue pour réinitialiser votre mot de passe",
+            adminContact: "Contacter l'administrateur",
+            supportMessage: "Si vous avez des difficultés à accéder à votre compte, veuillez contacter votre administrateur de ligue pour obtenir de l'aide pour la réinitialisation du mot de passe.",
+        },
+    }[lang];
+
+    const [teamName, setTeamName] = useState("");
+    const [playerName, setPlayerName] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [errors, setErrors] = useState<{ team?: string; player?: string; password?: string }>({});
+    const [shake, setShake] = useState(false);
+    const [showAdminModal, setShowAdminModal] = useState(false);
 
-    const handleSubmit = (e:any) => {
-        e.preventDefault();
-        setIsLoading(true);
+    const navigate = useNavigate();
 
-        // Simulate API call
-        setTimeout(() => {
-            console.log('Login attempted with:', { email, password, rememberMe });
-            setIsLoading(false);
-            alert('Login functionality would be implemented here');
-        }, 1500);
+    // Load remembered credentials
+    useEffect(() => {
+        const remembered = localStorage.getItem("rememberedCredentials");
+        if (remembered) {
+            const { team, player } = JSON.parse(remembered);
+            setTeamName(team);
+            setPlayerName(player);
+            setRememberMe(true);
+        }
+    }, []);
+
+    const validateForm = () => {
+        const newErrors: { team?: string; player?: string; password?: string } = {};
+
+        if (!teamName.trim()) newErrors.team = `${t.team} ${lang === 'en' ? 'is required' : 'est requis'}`;
+        if (!playerName.trim()) newErrors.player = `${t.player} ${lang === 'en' ? 'is required' : 'est requis'}`;
+        if (!password) newErrors.password = `${t.password} ${lang === 'en' ? 'is required' : 'est requis'}`;
+        else if (password.length < 6)
+            newErrors.password = lang === 'en'
+                ? 'Password must be at least 6 characters'
+                : 'Le mot de passe doit contenir au moins 6 caractères';
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!validateForm()) return setShake(true);
+
+        setIsLoading(true);
+
+        try {
+            const userQuery = query(
+                collection(db, "users"),
+                where("team", "==", teamName),
+                where("player", "==", playerName)
+            );
+            const snapshot = await getDocs(userQuery);
+
+            if (!snapshot.empty) {
+                const docData = snapshot.docs[0].data() as TeamUser;
+
+                // For production, compare hashed passwords
+                if (docData.password === password) {
+                    // Save credentials if rememberMe
+                    if (rememberMe) {
+                        localStorage.setItem(
+                            "rememberedCredentials",
+                            JSON.stringify({ team: teamName, player: playerName })
+                        );
+                    } else {
+                        localStorage.removeItem("rememberedCredentials");
+                    }
+
+                    setIsLoading(false);
+
+                    // Use the auth context login function
+                    login(docData);
+
+                    // Role-based navigation
+                    switch (docData.role) {
+                        case "admin":
+                            navigate("/dashboard", { state: { user: docData, lang } });
+                            break;
+                        case "referee":
+                            navigate("/dashboard", { state: { user: docData, lang } });
+                            break;
+                        case "player":
+                        default:
+                            navigate("/dashboard", { state: { user: docData, lang } });
+                            break;
+                    }
+                } else {
+                    setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
+                    setShake(true);
+                    setTimeout(() => setShake(false), 500);
+                    setIsLoading(false);
+                }
+            } else {
+                setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
+                setShake(true);
+                setTimeout(() => setShake(false), 500);
+                setIsLoading(false);
+            }
+        } catch (err) {
+            console.error("Login error:", err);
+            setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
+            setShake(true);
+            setTimeout(() => setShake(false), 500);
+            setIsLoading(false);
+        }
+    };
+
+
+    const toggleLanguage = () => setLang(prev => prev === 'en' ? 'fr' : 'en');
+    const handleForgotPassword = () => setShowAdminModal(true);
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-800 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl flex flex-col md:flex-row w-full max-w-4xl">
-                {/* Left side - Form */}
-                <div className="w-full md:w-2/3 p-5 md:p-12">
-                    <div className="text-center mb-10">
-                        <div className="flex justify-center items-center mb-4">
-                            <FaVolleyballBall className="text-orange-500 text-4xl mr-2" />
-                            <h1 className="text-3xl font-bold text-gray-800">Volleyball League</h1>
-                        </div>
-                        <p className="text-gray-600">Sign in to access your team dashboard</p>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="relative">
-                            <div className="absolute left-3 top-3 text-gray-400">
-                                <FaEnvelope />
-                            </div>
-                            <input
-                                type="email"
-                                id="email"
-                                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                                placeholder="Email Address"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        <div className="relative">
-                            <div className="absolute left-3 top-3 text-gray-400">
-                                <FaLock />
-                            </div>
-                            <input
-                                type="password"
-                                id="password"
-                                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                                placeholder="Password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        <div className="flex items-center justify-between">
+        <>
+            <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 flex items-center justify-center p-4 md:p-8">
+                {/* Login card */}
+                <div className={`bg-white rounded-2xl shadow-2xl flex flex-col md:flex-row w-full max-w-5xl transform transition-transform duration-300 ${shake ? 'shake-animation' : ''}`}>
+                    {/* Left side - Form */}
+                    <div className="w-full md:w-3/5 p-5 md:p-8 lg:p-10">
+                        <div className="flex justify-between items-center mb-4">
                             <div className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    id="remember"
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                />
-                                <label htmlFor="remember" className="ml-2 block text-sm text-gray-700">Remember me</label>
+                                <FaVolleyballBall className="text-orange-500 text-2xl md:text-3xl mr-2" />
+                                <h1 className="text-xl md:text-2xl font-bold text-gray-800">{t.title}</h1>
                             </div>
 
-                            <a href="#" className="text-sm text-blue-600 hover:underline">Forgot password?</a>
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition flex items-center justify-center"
-                            disabled={isLoading}
-                        >
-                            {isLoading ? (
-                                <>
-                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Signing in...
-                                </>
-                            ) : 'Sign In'}
-                        </button>
-                    </form>
-
-                    <div className="mt-8">
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-300"></div>
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-4 grid grid-cols-2 gap-3">
-                            <button className="bg-white py-2 px-4 border border-gray-300 rounded-lg shadow-sm flex justify-center items-center text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition">
-                                <FaGoogle className="text-red-500 mr-2" /> Google
-                            </button>
-                            <button className="bg-white py-2 px-4 border border-gray-300 rounded-lg shadow-sm flex justify-center items-center text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition">
-                                <FaFacebook className="text-blue-600 mr-2" /> Facebook
+                            <button
+                                onClick={toggleLanguage}
+                                className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 transition-colors px-2 py-1 rounded-full border border-gray-200 hover:border-blue-300 text-sm"
+                                aria-label="Change language"
+                            >
+                                <FaGlobe className="text-xs" />
+                                <span className="font-medium">{lang === 'en' ? 'FR' : 'EN'}</span>
                             </button>
                         </div>
-                    </div>
 
-                    <div className="mt-8 text-center">
-                        <p className="text-sm text-gray-600">
-                            Don't have an account?
-                            <a href="#" className="font-medium text-blue-600 hover:underline ml-1">Sign up</a>
-                        </p>
-                    </div>
-                </div>
+                        <p className="text-gray-600 mb-6 text-sm md:text-base">{t.subtitle}</p>
 
-                {/* Right side - Graphics */}
-                <div className="w-full md:w-1/3 bg-gradient-to-b from-blue-600 to-blue-800 text-white rounded-b-2xl md:rounded-none md:rounded-r-2xl p-8 flex flex-col items-center justify-center">
-                    <div className="relative mb-6">
-                        <div className="absolute -inset-4 bg-blue-500 rounded-full opacity-20 animate-pulse"></div>
-                        <FaVolleyballBall className="text-6xl text-orange-400 relative animate-bounce" />
-                    </div>
-
-                    <h2 className="text-2xl font-bold mb-4 text-center">Welcome to the League</h2>
-                    <p className="text-center text-blue-100 mb-6">
-                        Access your team's dashboard, manage players, view schedules, and track statistics.
-                    </p>
-
-                    <div className="space-y-4 mt-8">
-                        <div className="flex items-center">
-                            <div className="bg-blue-500 p-2 rounded-full mr-3">
-                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                </svg>
+                        <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+                            {/* Team Name */}
+                            <div>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-3 text-gray-400">
+                                        <FaUsers />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className={`pl-10 w-full px-4 py-3 border ${errors.team ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
+                                        placeholder={t.team}
+                                        value={teamName}
+                                        onChange={(e) => {
+                                            setTeamName(e.target.value);
+                                            if (errors.team) setErrors({ ...errors, team: undefined });
+                                        }}
+                                    />
+                                </div>
+                                {errors.team && <p className="text-red-500 text-xs mt-1">{errors.team}</p>}
                             </div>
-                            <span>Player Management</span>
+
+                            {/* Player Name */}
+                            <div>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-3 text-gray-400">
+                                        <FaUser />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className={`pl-10 w-full px-4 py-3 border ${errors.player ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
+                                        placeholder={t.player}
+                                        value={playerName}
+                                        onChange={(e) => {
+                                            setPlayerName(e.target.value);
+                                            if (errors.player) setErrors({ ...errors, player: undefined });
+                                        }}
+                                    />
+                                </div>
+                                {errors.player && <p className="text-red-500 text-xs mt-1">{errors.player}</p>}
+                            </div>
+
+                            {/* Password */}
+                            <div>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-3 text-gray-400">
+                                        <FaLock />
+                                    </div>
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        className={`pl-10 pr-10 w-full px-4 py-3 border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
+                                        placeholder={t.password}
+                                        value={password}
+                                        onChange={(e) => {
+                                            setPassword(e.target.value);
+                                            if (errors.password) setErrors({ ...errors, password: undefined });
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                    </button>
+                                </div>
+                                {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
+                            </div>
+
+                            {/* Options */}
+                            <div className="flex justify-between items-center">
+                                <label className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={rememberMe}
+                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                        className="rounded text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span>{t.rememberMe}</span>
+                                </label>
+
+                                <button
+                                    type="button"
+                                    className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                                    onClick={handleForgotPassword}
+                                >
+                                    {t.forgotPassword}
+                                </button>
+                            </div>
+
+                            <div className="relative flex items-center justify-center">
+                                <div className="flex-grow border-t border-transparent"></div>
+                                <span className="flex-shrink mx-4 text-transparent text-sm">{t.or}</span>
+                                <div className="flex-grow border-t border-transparent"></div>
+                            </div>
+
+                            {/* Submit */}
+                            <button
+                                type="submit"
+                                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all flex items-center justify-center shadow-md hover:shadow-lg"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        {t.loading}
+                                    </>
+                                ) : (
+                                    t.signin
+                                )}
+                            </button>
+
+                        </form>
+                    </div>
+
+                    {/* Right side - Info / graphics */}
+                    <div className="w-full md:w-2/5 bg-gradient-to-br from-blue-700 to-blue-900 text-white rounded-b-2xl md:rounded-none md:rounded-r-2xl p-8 flex flex-col items-center justify-center relative overflow-hidden">
+                        {/* Decorative elements */}
+                        <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-blue-600 opacity-20"></div>
+                        <div className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full bg-blue-600 opacity-20"></div>
+
+                        <div className="relative mb-6 z-10">
+                            <div className="absolute -inset-4 bg-blue-600 rounded-full opacity-30 animate-ping"></div>
+                            <div className="absolute -inset-2 bg-blue-500 rounded-full opacity-20"></div>
+                            <FaVolleyballBall className="text-5xl md:text-6xl text-orange-400 relative animate-bounce" style={{ animationDuration: '2s' }} />
                         </div>
 
-                        <div className="flex items-center">
-                            <div className="bg-blue-500 p-2 rounded-full mr-3">
-                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                </svg>
+                        <h2 className="text-xl md:text-2xl font-bold mb-4 text-center z-10">{t.welcome}</h2>
+                        <p className="text-center text-blue-100 mb-6 text-sm md:text-base z-10">{t.description}</p>
+
+                        <h3 className="text-lg font-semibold mb-4 self-start z-10">{t.features}</h3>
+
+                        <div className="space-y-4 w-full text-sm z-10">
+                            <div className="flex items-center bg-blue-600/30 backdrop-blur-sm p-3 rounded-lg">
+                                <div className="bg-white/20 p-2 rounded-full mr-3">
+                                    <FaUser className="w-4 h-4 text-white" />
+                                </div>
+                                <span>{t.playerMgmt}</span>
                             </div>
-                            <span>Schedule & Events</span>
+
+                            <div className="flex items-center bg-blue-600/30 backdrop-blur-sm p-3 rounded-lg">
+                                <div className="bg-white/20 p-2 rounded-full mr-3">
+                                    <FaCalendarAlt className="w-4 h-4 text-white" />
+                                </div>
+                                <span>{t.schedule}</span>
+                            </div>
+
+                            <div className="flex items-center bg-blue-600/30 backdrop-blur-sm p-3 rounded-lg">
+                                <div className="bg-white/20 p-2 rounded-full mr-3">
+                                    <FaChartBar className="w-4 h-4 text-white" />
+                                </div>
+                                <span>{t.stats}</span>
+                            </div>
                         </div>
 
-                        <div className="flex items-center">
-                            <div className="bg-blue-500 p-2 rounded-full mr-3">
-                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                                </svg>
-                            </div>
-                            <span>Statistics & Analytics</span>
+                        {/* Animated volleyballs in background */}
+                        <div className="absolute bottom-0 left-0 w-full flex justify-between px-6 opacity-10">
+                            <FaVolleyballBall className="text-4xl animate-bounce" style={{ animationDelay: '0.5s', animationDuration: '3s' }} />
+                            <FaVolleyballBall className="text-4xl animate-bounce" style={{ animationDelay: '1s', animationDuration: '4s' }} />
+                            <FaVolleyballBall className="text-4xl animate-bounce" style={{ animationDelay: '1.5s', animationDuration: '5s' }} />
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    );
-};
+
+            {/* Admin Contact Modal */}
+
+            {
+
+                showAdminModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+                            <button onClick={() => setShowAdminModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                                <FaTimes className="text-xl" />
+                            </button>
+                            <div className="flex items-center mb-4">
+                                <div className="bg-blue-100 p-3 rounded-full mr-3">
+                                    <FaInfoCircle className="text-blue-600 text-xl" />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-800">{t.adminContact}</h3>
+                            </div>
+                            <p className="text-gray-600 mb-2">{t.supportMessage}</p>
+                            <div className="bg-blue-50 p-4 rounded-lg mt-4">
+                                <p className="text-blue-800 font-medium">{t.contactAdmin}</p>
+                                <div className="mt-3 flex flex-col space-y-2">
+                                    <div className="flex items-center">
+                                        <span className="text-blue-700 font-medium mr-2">Email:</span>
+                                        <span className="text-blue-600">admin@volleyleague.example</span>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <span className="text-blue-700 font-medium mr-2">Phone:</span>
+                                        <span className="text-blue-600">(555) 123-4567</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowAdminModal(false)} className="w-full mt-6 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                                {lang === 'en' ? 'Close' : 'Fermer'}
+                            </button>
+                        </div>
+                    </div>
+                )
+
+            }
+            <style>{`
+        .shake-animation {
+          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); }
+          20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+          40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+      `}</style>
+
+        </>
+    )
+}
