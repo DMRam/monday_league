@@ -1,20 +1,19 @@
 import {
     FaCalendarAlt,
     FaChartLine,
-    FaMinus,
-    FaPlus,
     FaSave,
     FaTrophy,
     FaUserFriends,
     FaClock,
 } from "react-icons/fa";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActiveTabsProps } from "../../interfaces/ActiveTabs";
 import type { Match, Team, TeamWeekStats } from "../../interfaces/Dashboards";
-import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import type { TeamUser } from "../../interfaces/User";
 import { useDashboard } from "../../hooks/useDashboard";
+import { CountdownTimer } from "./CountDown";
 
 /**
  * --- Utility Hooks & Helpers ---
@@ -231,28 +230,50 @@ const RenderMatchCard = ({
     console.log('User RenderMatchCard: ', user)
 
     return (
-        <div key={match.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition duration-200">
+        <div
+            key={match.id}
+            className={`bg-white border rounded-xl p-6 shadow-sm transition duration-200 hover:shadow-lg ${user.role === "referee" && user.name === match.referee ? "border-blue-500" : "border-gray-200"
+                }`}
+        >
             {/* Pool & Status */}
             <div className="flex justify-between items-center mb-4">
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPoolBadgeClass(match.pool)}`}>
                     {match.pool}
                 </span>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${match.completed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                    {match.completed ? 'Completed' : 'Scheduled'}
+                <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${match.completed ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                        }`}
+                >
+                    {match.completed ? "Completed" : "Scheduled"}
                 </span>
             </div>
 
             {/* Gym and Referee info */}
             <div className="text-sm text-gray-500 mb-4 space-y-1">
                 <div>{match.gym} • {match.timeSlot}</div>
-                <div>Referee: {match.referee}</div>
+                <div className="flex items-center gap-2">
+                    Referee:
+                    <span
+                        className={`font-semibold ${user.role === "referee" && user.name === match.referee
+                            ? "text-blue-700"
+                            : "text-gray-700"
+                            }`}
+                    >
+                        {match.referee}
+                    </span>
+                    {user.role === "referee" && user.name === match.referee && (
+                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">You</span>
+                    )}
+                </div>
             </div>
 
             {/* Teams and Scores */}
             <div className="flex justify-between items-center mb-4">
                 {/* Team A */}
-                <div className="text-center flex-1">
+                <div
+                    className={`text-center flex-1 rounded-lg p-2 transition ${user.name === match.teamA ? "bg-blue-50 border border-blue-200" : ""
+                        }`}
+                >
                     <p className="font-semibold text-gray-800">{match.teamA}</p>
                     <p className="text-3xl font-bold text-blue-600">{match.scoreA}</p>
                 </div>
@@ -260,17 +281,20 @@ const RenderMatchCard = ({
                 <span className="text-gray-400 mx-4 font-semibold text-lg">VS</span>
 
                 {/* Team B */}
-                <div className="text-center flex-1">
+                <div
+                    className={`text-center flex-1 rounded-lg p-2 transition ${user.name === match.teamB ? "bg-red-50 border border-red-200" : ""
+                        }`}
+                >
                     <p className="font-semibold text-gray-800">{match.teamB}</p>
                     <p className="text-3xl font-bold text-red-600">{match.scoreB}</p>
                 </div>
             </div>
 
-            {/* Score update (dropdowns) */}
+            {/* Score update */}
             {!match.completed && canEditScore(match, user) && (
                 <div className="mt-4 space-y-4">
                     <div className="flex justify-between items-center gap-4">
-                        {/* Team A Score */}
+                        {/* Team A */}
                         <div className="flex items-center space-x-2 flex-1">
                             <span className="font-semibold text-gray-700">{match.teamA}</span>
                             <select
@@ -286,6 +310,7 @@ const RenderMatchCard = ({
                                         user
                                     )
                                 }
+                                disabled={Date.now() < match.startTime || Date.now() > match.endTime}
                             >
                                 {Array.from({ length: 50 }).map((_, i) => (
                                     <option key={i} value={i}>{i}</option>
@@ -293,7 +318,7 @@ const RenderMatchCard = ({
                             </select>
                         </div>
 
-                        {/* Team B Score */}
+                        {/* Team B */}
                         <div className="flex items-center space-x-2 flex-1">
                             <span className="font-semibold text-gray-700">{match.teamB}</span>
                             <select
@@ -309,12 +334,27 @@ const RenderMatchCard = ({
                                         user
                                     )
                                 }
+                                disabled={Date.now() < match.startTime || Date.now() > match.endTime}
                             >
                                 {Array.from({ length: 50 }).map((_, i) => (
                                     <option key={i} value={i}>{i}</option>
                                 ))}
                             </select>
                         </div>
+                    </div>
+
+                    {/* Countdown timer */}
+                    <div className={`text-sm text-center mb-2 ${Date.now() < match.startTime ? "text-yellow-600" :
+                        Date.now() > match.endTime ? "text-red-600" :
+                            "text-green-600"
+                        }`}>
+                        {Date.now() < match.startTime ? (
+                            <>Match starts in: <CountdownTimer endTime={match.startTime} /></>
+                        ) : Date.now() > match.endTime ? (
+                            <>Match ended</>
+                        ) : (
+                            <>Time remaining: <CountdownTimer endTime={match.endTime} /></>
+                        )}
                     </div>
 
                     {/* Save button */}
@@ -330,20 +370,15 @@ const RenderMatchCard = ({
                                 user
                             )
                         }
-                        className="w-full bg-blue-600 text-white py-2 rounded-lg flex items-center justify-center hover:bg-blue-700 transition"
+                        className="w-full bg-blue-600 text-white py-2 rounded-lg flex items-center justify-center hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        disabled={Date.now() < match.startTime || Date.now() > match.endTime}
                     >
                         <FaSave className="mr-2" /> Save Results
                     </button>
                 </div>
             )}
-
-            {/* Read-only message for referees */}
-            {!match.completed && !canEditScore(match, user) && user.role === 'referee' && (
-                <div className="text-center text-sm text-gray-500 mt-4">
-                    You can only edit matches where you are assigned as referee
-                </div>
-            )}
         </div>
+
     );
 
 };
@@ -372,6 +407,8 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps) => {
         standings,
     } = props;
 
+    const detailsRef = useRef<HTMLDivElement>(null);
+
     const { calculateSecondHourPools } = useSecondHourPools();
 
     const [poolATeamsSecondPeriod, setPoolATeamsSecondPeriod] = useState<Team[]>([]);
@@ -381,6 +418,20 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps) => {
     const [isLoading, setIsLoading] = useState(true);
 
     console.log('User on ActiveTabsRenderer: ', user)
+
+    const handleSelectTeam = (team: Team) => {
+        setSelectedTeam(team);
+        setTimeout(() => {
+            const offset = 220; 
+            const elementPosition = detailsRef.current?.getBoundingClientRect().top || 0;
+            const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+            window.scrollTo({
+                top: offsetPosition,
+                behavior: "smooth"
+            });
+        }, 100);
+    };
 
 
     const calculateSecondPeriodPools = (
@@ -677,82 +728,68 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps) => {
             return (
                 <div className="bg-gray-50 p-6 rounded-lg shadow-md space-y-6">
                     <h2 className="text-3xl font-bold text-gray-800">Teams</h2>
-
                     <p className="text-gray-600 font-medium">{teams?.length || 0} teams available</p>
 
                     {/* Teams grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {teams?.map(team => (
-                            <div
-                                key={team.id}
-                                className="border border-gray-200 rounded-xl p-5 cursor-pointer hover:shadow-lg transition duration-200 bg-white"
-                                onClick={() => setSelectedTeam(team)}
-                            >
-                                <div className="flex justify-between items-start mb-3">
-                                    <h3 className="text-xl font-semibold text-blue-700">{team.name}</h3>
-                                    {/* <span
-                                        className={`px-3 py-1 rounded-full text-sm font-medium ${team.pool === 'A'
-                                            ? 'bg-blue-100 text-blue-800'
-                                            : 'bg-orange-100 text-orange-800'
-                                            }`}
-                                    >
-                                        Pool {team.pool}
-                                    </span> */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4 md:pt-6 lg:pt-8">
+
+                        {teams?.map((team, index) => {
+                            const isSelected = selectedTeam?.id === team.id;
+                            return (
+                                <div
+                                    key={team.id}
+                                    className={`border rounded-xl p-5 cursor-pointer transition duration-200 
+                                ${isSelected ? 'bg-blue-50 shadow-lg border-blue-300' : 'bg-white hover:shadow-lg'}`}
+                                    onClick={() => handleSelectTeam(team)}
+                                    style={{
+                                        marginTop: index + 1 < 2 ? '1rem' : undefined
+                                    }}
+
+                                >
+                                    <div className="flex justify-between items-start mb-3">
+                                        <h3 className="text-xl font-semibold text-blue-700">{team.name}</h3>
+                                    </div>
+
+                                    <p className="text-gray-500">Captain: {team.coach}</p>
+                                    <p className="text-gray-500">{team.players.length} players</p>
+
+                                    <div className="mt-3 space-y-1">
+                                        <p className="font-semibold text-blue-600">
+                                            Today's Points: {team.currentDayPoints || 0}
+                                        </p>
+                                        <p className="font-semibold text-green-600">
+                                            Total Points: {team.totalPoints}
+                                        </p>
+                                    </div>
+
+                                    {/* Expandable player list */}
+                                    {isSelected && (
+                                        <div ref={detailsRef} className="mt-4 border-t pt-4 space-y-3">
+                                            <h4 className="font-bold text-gray-700 mb-2">Players</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {team.players.map((player, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="flex items-center gap-3 p-3 border rounded-lg hover:shadow-sm transition duration-150"
+                                                    >
+                                                        <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-800 text-lg">
+                                                            <FaUserFriends />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-semibold">{player}</p>
+                                                            <p className="text-gray-500 text-sm">Player #{index + 1}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                <p className="text-gray-500">Coach: {team.coach}</p>
-                                <p className="text-gray-500">{team.players.length} players</p>
-                                <div className="mt-3 space-y-1">
-                                    <p className="font-semibold text-blue-600">
-                                        Today's Points: {team.currentDayPoints || 0}
-                                    </p>
-                                    <p className="font-semibold text-green-600">
-                                        Total Points: {team.totalPoints}
-                                    </p>
-                                </div>
-                            </div>
-                        )) || (
+                            );
+                        }) || (
                                 <p className="text-gray-500 col-span-full text-center">No teams available</p>
                             )}
                     </div>
-
-                    {/* Selected team details */}
-                    {selectedTeam && (
-                        <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-bold text-gray-800">{selectedTeam.name} - Players</h2>
-
-                            </div>
-
-                            <div className="flex items-center gap-4 mb-6">
-                                {/* <span className={`flex-shrink-0 px-3 py-1 rounded-full text-sm font-medium ${selectedTeam.pool === 'A' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-                                    Pool {selectedTeam.pool}
-                                </span> */}
-                                <div>
-                                    <h3 className="font-semibold text-lg">{selectedTeam.name}</h3>
-                                    <p className="text-gray-500">Coach: {selectedTeam.coach}</p>
-                                    <p className="font-semibold text-blue-600">Today: {selectedTeam.currentDayPoints || 0} pts</p>
-                                    <p className="font-semibold text-green-600">Total: {selectedTeam.totalPoints} pts</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {selectedTeam.players.map((player, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-center gap-4 p-4 border rounded-xl hover:shadow-md transition duration-200"
-                                    >
-                                        <div className="h-12 w-12 flex items-center justify-center rounded-full bg-blue-100 text-blue-800 text-xl">
-                                            <FaUserFriends />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-semibold">{player}</h3>
-                                            <p className="text-gray-500 text-sm">Player #{index + 1}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
                     {!selectedTeam && (
                         <div className="bg-white rounded-xl shadow-md p-6 text-center mt-6">
@@ -761,6 +798,7 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps) => {
                     )}
                 </div>
             );
+
 
         case 'matches':
             return (
@@ -940,7 +978,7 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps) => {
                                             <th className="px-4 py-2 text-left">Position</th>
                                             <th className="px-4 py-2 text-left">Team</th>
                                             <th className="px-4 py-2 text-left">Pool</th>
-                                            <th className="px-4 py-2 text-left">Coach</th>
+                                            <th className="px-4 py-2 text-left">Captain</th>
                                             <th className="px-4 py-2 text-left">Total Points</th>
                                         </tr>
                                     </thead>

@@ -105,43 +105,86 @@ export const useDashboard = () => {
 
 
     // Generate matches for all weeks
-    const generateMatches = async (teams: Team[], matches: Match[], weeksToGenerate: number, setShowMatchCreation: (value: React.SetStateAction<boolean>) => void, setMatches: (value: React.SetStateAction<Match[]>) => void) => {
+    // const generateMatches = async (teams: Team[], matches: Match[], weeksToGenerate: number, setShowMatchCreation: (value: React.SetStateAction<boolean>) => void, setMatches: (value: React.SetStateAction<Match[]>) => void) => {
+    //     if (teams.length < 6) {
+    //         alert("You need at least 6 teams to generate matches");
+    //         return;
+    //     }
+
+    //     try {
+    //         // Clear existing matches for these weeks
+    //         const existingMatches = matches.filter(m => m.week <= weeksToGenerate);
+    //         const deletePromises = existingMatches.map(match =>
+    //             updateDoc(doc(db, 'matches', match.id), { deleted: true })
+    //         );
+    //         await Promise.all(deletePromises);
+
+    //         // Generate matches for each week
+    //         for (let week = 1; week <= weeksToGenerate; week++) {
+    //             await generateMatchesForWeek(week, teams);
+    //         }
+
+    //         alert(`Successfully generated matches for ${weeksToGenerate} weeks`);
+    //         setShowMatchCreation(false);
+
+    //         // Refresh matches
+    //         const snapshot = await getDocs(collection(db, 'matches'));
+    //         const fetchedMatches: Match[] = snapshot.docs
+    //             .map(doc => ({
+    //                 id: doc.id,
+    //                 ...doc.data()
+    //             } as Match))
+    //             .filter(match => !match.completed);
+
+    //         setMatches(sortMatches(fetchedMatches));
+    //     } catch (error) {
+    //         console.error("Error generating matches:", error);
+    //         alert("Error generating matches");
+    //     }
+    // };
+
+    const generateMatches = async (
+        teams: Team[],
+        matches: Match[],
+        weeksToGenerate: number,
+        setShowMatchCreation: (value: React.SetStateAction<boolean>) => void,
+        setMatches: (value: React.SetStateAction<Match[]>) => void
+    ) => {
         if (teams.length < 6) {
             alert("You need at least 6 teams to generate matches");
             return;
         }
 
         try {
-            // Clear existing matches for these weeks
-            const existingMatches = matches.filter(m => m.week <= weeksToGenerate);
-            const deletePromises = existingMatches.map(match =>
-                updateDoc(doc(db, 'matches', match.id), { deleted: true })
-            );
-            await Promise.all(deletePromises);
+            // Determine the next week to generate matches
+            const maxWeek = matches.length ? Math.max(...matches.map(m => m.week)) : 0;
+            const startWeek = maxWeek + 1;
 
-            // Generate matches for each week
-            for (let week = 1; week <= weeksToGenerate; week++) {
+            // Generate matches for the next `weeksToGenerate` weeks
+            for (let week = startWeek; week < startWeek + weeksToGenerate; week++) {
+                console.log(`Generating matches for week ${week}`);
                 await generateMatchesForWeek(week, teams);
             }
 
-            alert(`Successfully generated matches for ${weeksToGenerate} weeks`);
+            alert(`Successfully generated matches for ${weeksToGenerate} new week(s)`);
             setShowMatchCreation(false);
 
-            // Refresh matches
+            // Fetch updated matches from Firebase
             const snapshot = await getDocs(collection(db, 'matches'));
             const fetchedMatches: Match[] = snapshot.docs
                 .map(doc => ({
                     id: doc.id,
                     ...doc.data()
-                } as Match))
-                .filter(match => !match.completed);
+                } as Match));
 
             setMatches(sortMatches(fetchedMatches));
+
         } catch (error) {
             console.error("Error generating matches:", error);
             alert("Error generating matches");
         }
     };
+
 
     const generateMatchesForWeek = async (week: number, teams: Team[]) => {
         if (teams.length < 6) {
@@ -194,6 +237,17 @@ export const useDashboard = () => {
                     gym,
                     timeSlot: slot.time,
                     matchNumber: i + 1,
+                });
+                const userQuery = query(
+                    collection(db, "users"),
+                    where("name", "==", pool[r].coach)
+                );
+                const userSnap = await getDocs(userQuery);
+
+                userSnap.forEach(async (docSnap) => {
+                    await updateDoc(doc(db, "users", docSnap.id), {
+                        role: "referee",
+                    });
                 });
             }
         };
@@ -290,6 +344,18 @@ export const useDashboard = () => {
                     matchNumber: i + 1,
                     isSecondPeriod: true
                 });
+
+                const userQuery = query(
+                    collection(db, "users"),
+                    where("name", "==", poolTeams[r].coach)
+                );
+                const userSnap = await getDocs(userQuery);
+
+                userSnap.forEach(async (docSnap) => {
+                    await updateDoc(doc(db, "users", docSnap.id), {
+                        role: "referee",
+                    });
+                });
             }
         };
 
@@ -309,23 +375,20 @@ export const useDashboard = () => {
 
     // Match editing with referee team validation
     const canEditScore = (match: Match, user: TeamUser): boolean => {
+        console.log('User on CanEdit Function: ', user);
 
-
-        console.log('User on CanEdit Function: ', user)
+        // Admin can always edit
         if (user.role === 'admin') return true;
 
-        const normalizedUserTeam = normalizeString(user.team);
-        const normalizedTeamA = normalizeString(match.teamA);
-        const normalizedTeamB = normalizeString(match.teamB);
-        const normalizedReferee = normalizeString(match.referee);
+        // Referee must be assigned to this match
+        const isRefereeForMatch = user.name === match.referee;
 
-        const isRefereeTeam =
-            normalizedUserTeam === normalizedTeamA ||
-            normalizedUserTeam === normalizedTeamB ||
-            normalizedUserTeam === normalizedReferee;
+        // Optional: Only allow editing if match has started
+        // const gameHasStarted = Date.now() >= match.startTime;
 
-        return user.role === 'referee' && isRefereeTeam;
+        return user.role === 'referee' && isRefereeForMatch;
     };
+
 
 
 
