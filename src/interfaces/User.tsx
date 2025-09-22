@@ -4,4 +4,5 @@ export interface TeamUser {
     password: string
     role: 'admin' | 'referee' | 'player';
     team: string
+    player: string
 }

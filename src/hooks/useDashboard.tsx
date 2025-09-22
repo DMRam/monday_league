@@ -101,48 +101,6 @@ export const useDashboard = () => {
     };
 
 
-
-
-
-    // Generate matches for all weeks
-    // const generateMatches = async (teams: Team[], matches: Match[], weeksToGenerate: number, setShowMatchCreation: (value: React.SetStateAction<boolean>) => void, setMatches: (value: React.SetStateAction<Match[]>) => void) => {
-    //     if (teams.length < 6) {
-    //         alert("You need at least 6 teams to generate matches");
-    //         return;
-    //     }
-
-    //     try {
-    //         // Clear existing matches for these weeks
-    //         const existingMatches = matches.filter(m => m.week <= weeksToGenerate);
-    //         const deletePromises = existingMatches.map(match =>
-    //             updateDoc(doc(db, 'matches', match.id), { deleted: true })
-    //         );
-    //         await Promise.all(deletePromises);
-
-    //         // Generate matches for each week
-    //         for (let week = 1; week <= weeksToGenerate; week++) {
-    //             await generateMatchesForWeek(week, teams);
-    //         }
-
-    //         alert(`Successfully generated matches for ${weeksToGenerate} weeks`);
-    //         setShowMatchCreation(false);
-
-    //         // Refresh matches
-    //         const snapshot = await getDocs(collection(db, 'matches'));
-    //         const fetchedMatches: Match[] = snapshot.docs
-    //             .map(doc => ({
-    //                 id: doc.id,
-    //                 ...doc.data()
-    //             } as Match))
-    //             .filter(match => !match.completed);
-
-    //         setMatches(sortMatches(fetchedMatches));
-    //     } catch (error) {
-    //         console.error("Error generating matches:", error);
-    //         alert("Error generating matches");
-    //     }
-    // };
-
     const generateMatches = async (
         teams: Team[],
         matches: Match[],
@@ -150,8 +108,9 @@ export const useDashboard = () => {
         setShowMatchCreation: (value: React.SetStateAction<boolean>) => void,
         setMatches: (value: React.SetStateAction<Match[]>) => void
     ) => {
-        if (teams.length < 6) {
-            alert("You need at least 6 teams to generate matches");
+
+        if (teams.length < 5) {
+            alert(`You need at least 6 teams to generate matches ${teams.length}`,);
             return;
         }
 
@@ -187,7 +146,7 @@ export const useDashboard = () => {
 
 
     const generateMatchesForWeek = async (week: number, teams: Team[]) => {
-        if (teams.length < 6) {
+        if (teams.length < 5) {
             throw new Error("Need at least 6 teams to generate matches");
         }
 
@@ -228,7 +187,7 @@ export const useDashboard = () => {
                     pool: poolLabel,
                     teamA: pool[a].name,
                     teamB: pool[b].name,
-                    referee: pool[r].coach,
+                    referee: pool[r].name, // Referee any of the third Team
                     scoreA: 0,
                     scoreB: 0,
                     completed: false,
@@ -284,11 +243,11 @@ export const useDashboard = () => {
 
         // Sort teams by points and split into second-period pools
         const sortedTeams = [...teams].sort((a, b) => (teamPoints[b.name] || 0) - (teamPoints[a.name] || 0));
-        const pool1Teams = sortedTeams.slice(0, 3);
-        const pool2Teams = sortedTeams.slice(3, 6);
+        const pool1Teams = sortedTeams.slice(0, 3); // Positions 1, 2, 3
+        const pool2Teams = sortedTeams.slice(3, 6); // Positions 4, 5, 6
 
-        console.log("Pool 1 teams for second period:", pool1Teams.map(t => t.name));
-        console.log("Pool 2 teams for second period:", pool2Teams.map(t => t.name));
+        console.log("Pool 1 teams (positions 1-3):", pool1Teams.map((t, i) => `${i + 1}. ${t.name}`));
+        console.log("Pool 2 teams (positions 4-6):", pool2Teams.map((t, i) => `${i + 4}. ${t.name}`));
 
         if (pool1Teams.length < 3 || pool2Teams.length < 3) {
             console.warn("Not enough teams to generate second period matches.");
@@ -309,31 +268,51 @@ export const useDashboard = () => {
             return matchDate;
         };
 
-        // Helper: generate matches within a pool
-        const generatePoolMatches = async (poolTeams: Team[], poolLabel: string, gym: string) => {
-            const combos = [
-                [0, 1, 2],
-                [1, 2, 0],
-                [2, 0, 1],
+        // Helper: generate matches according to specific position-based pairing
+        const generatePoolMatches = async (poolTeams: Team[], poolLabel: string, gym: string, positionOffset: number) => {
+            // Teams are already sorted by position (index 0 = highest rank, index 2 = lowest rank in pool)
+            const matchesConfig = [
+                {
+                    teamAIndex: 0,  // Position 1 or 4
+                    teamBIndex: 2,  // Position 3 or 6
+                    refereeIndex: 1 // Position 2 or 5
+                },
+                {
+                    teamAIndex: 2,  // Position 3 or 6
+                    teamBIndex: 1,  // Position 2 or 5
+                    refereeIndex: 0 // Position 1 or 4
+                },
+                {
+                    teamAIndex: 0,  // Position 1 or 4
+                    teamBIndex: 1,  // Position 2 or 5
+                    refereeIndex: 2 // Position 3 or 6
+                }
             ];
 
-            for (let i = 0; i < combos.length; i++) {
-                const [a, b, r] = combos[i];
+            for (let i = 0; i < matchesConfig.length; i++) {
+                const config = matchesConfig[i];
                 const slot = slots[i];
                 const matchDate = createMatchDate(slot);
+
+                const teamA = poolTeams[config.teamAIndex];
+                const teamB = poolTeams[config.teamBIndex];
+                const refereeTeam = poolTeams[config.refereeIndex];
+
                 console.log(`Creating match in ${poolLabel}:`, {
-                    teamA: poolTeams[a].name,
-                    teamB: poolTeams[b].name,
-                    referee: poolTeams[r].name,
+                    match: i + 1,
+                    teamA: `${config.teamAIndex + 1 + positionOffset} (${teamA.name})`,
+                    teamB: `${config.teamBIndex + 1 + positionOffset} (${teamB.name})`,
+                    referee: `${config.refereeIndex + 1 + positionOffset} (${refereeTeam.name})`,
                     time: slot.time
                 });
 
+                // Add match to Firestore
                 await addDoc(collection(db, 'matches'), {
                     week,
                     pool: poolLabel,
-                    teamA: poolTeams[a].name,
-                    teamB: poolTeams[b].name,
-                    referee: poolTeams[r].coach,
+                    teamA: teamA.name,
+                    teamB: teamB.name,
+                    referee: refereeTeam.name,
                     scoreA: 0,
                     scoreB: 0,
                     completed: false,
@@ -345,9 +324,10 @@ export const useDashboard = () => {
                     isSecondPeriod: true
                 });
 
+                // Assign referee role to the coach of the referee team
                 const userQuery = query(
                     collection(db, "users"),
-                    where("name", "==", poolTeams[r].coach)
+                    where("name", "==", refereeTeam.coach)
                 );
                 const userSnap = await getDocs(userQuery);
 
@@ -359,8 +339,9 @@ export const useDashboard = () => {
             }
         };
 
-        await generatePoolMatches(pool1Teams, "Second Period - Pool 1", "Gym 1");
-        await generatePoolMatches(pool2Teams, "Second Period - Pool 2", "Gym 2");
+        // Generate matches for both pools with position offsets
+        await generatePoolMatches(pool1Teams, "Second Period - Premier Pool", "Gym 1", 0); // Positions 1-3
+        await generatePoolMatches(pool2Teams, "Second Period - Secondary Pool", "Gym 2", 3); // Positions 4-6
 
         // Fetch updated matches and set state
         const snapshot = await getDocs(collection(db, 'matches'));
@@ -381,16 +362,13 @@ export const useDashboard = () => {
         if (user.role === 'admin') return true;
 
         // Referee must be assigned to this match
-        const isRefereeForMatch = user.name === match.referee;
+        const isRefereeForMatch = user.team === match.referee;
 
         // Optional: Only allow editing if match has started
         // const gameHasStarted = Date.now() >= match.startTime;
 
         return user.role === 'referee' && isRefereeForMatch;
     };
-
-
-
 
     // Change score to dropdown select
     const updateMatchScore = (

@@ -9,6 +9,8 @@ import { AdminTab } from './components/AdminTab';
 import { ActiveTabsRenderer } from './components/ActiveTabs';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
+// import { initializeTeams } from '../admin/UpdateTeamPlayers';
+// import { initializeUsers } from '../admin/CreateUsers';
 
 export const Dashboard = () => {
     const {
@@ -21,6 +23,14 @@ export const Dashboard = () => {
         updateMatchScore,
         sortMatches
     } = useDashboard();
+
+    // const [initializationStatus, setInitializationStatus] = useState<string>('');
+    // const [initializing, setInitializing] = useState(false);
+
+
+
+    // initializeUsers()
+    // initializeTeams()
 
     const { user, logout } = useAuth();
 
@@ -45,30 +55,57 @@ export const Dashboard = () => {
     const [showMatchCreation, setShowMatchCreation] = useState(false);
     const [weeksToGenerate, setWeeksToGenerate] = useState(6);
 
+    // const handleManualInitialize = async () => {
+    //     if (user?.role !== 'admin') return;
+
+    //     setInitializing(true);
+    //     setInitializationStatus('Initializing...');
+
+    //     try {
+    //         const result = await initializeUsers();
+    //         setInitializationStatus(result.success ? '✅ Initialization successful!' : 'ℹ️ ' + result.message);
+    //     } catch (error) {
+    //         setInitializationStatus('❌ Initialization failed: ' + error);
+    //     } finally {
+    //         setInitializing(false);
+    //     }
+    // };
+
     useEffect(() => {
         const fetchTeams = async () => {
             try {
                 const snapshot = await getDocs(collection(db, 'teams'));
-                const fetchedTeams: Team[] = snapshot.docs.map(doc => {
-                    const data = doc.data();
-                    if (!data.name || !data.coach) return null;
-                    return {
-                        id: doc.id,
-                        name: data.name,
-                        totalPoints: data.totalPoints || 0,
-                        pool: data.pool || 'Unassigned',
-                        coach: data.coach,
-                        players: data.players || [],
-                        currentDayPoints: data.currentDayPoints || 0,
-                        secondPeriodPoints: data.secondPeriodPoints || 0
-                    } as Team;
-                }).filter((team): team is Team => team !== null);
+                const fetchedTeams: Team[] = snapshot.docs
+                    .filter(doc => {
+                        const data = doc.data();
+                        const isValid = data.name && data.coach;
+                        if (!isValid) {
+                            console.warn(`Skipping invalid team document: ${doc.id}`);
+                        }
+                        return isValid;
+                    })
+                    .map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            name: data.name,
+                            totalPoints: data.totalPoints || 0,
+                            pool: data.pool || 'Unassigned',
+                            coach: data.coach,
+                            players: data.players || [],
+                            currentDayPoints: data.currentDayPoints || 0,
+                            secondPeriodPoints: data.secondPeriodPoints || 0
+                        } as Team;
+                    });
 
                 setTeams(fetchedTeams);
+                console.log("Fetched teams:", fetchedTeams.length, fetchedTeams);
             } catch (error) {
                 console.error('Error fetching teams:', error);
             }
         };
+
+        console.log("TEAM LENGTH!!!! ", teams.length)
 
         const fetchMatches = async () => {
             try {
@@ -233,6 +270,21 @@ export const Dashboard = () => {
             <div className="container mx-auto px-4 py-8">
                 {renderContent()}
             </div>
+
+            {/* {user?.role === 'admin' && (
+                <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded">
+                    <button
+                        onClick={handleManualInitialize}
+                        disabled={initializing}
+                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                    >
+                        {initializing ? 'Initializing...' : 'Initialize Users'}
+                    </button>
+                    {initializationStatus && (
+                        <p className="mt-2 text-sm">{initializationStatus}</p>
+                    )}
+                </div>
+            )} */}
         </div>
     );
 };

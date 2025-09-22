@@ -4,10 +4,22 @@ import {
     FaVolleyballBall, FaUsers, FaUser, FaLock, FaEye, FaEyeSlash,
     FaCalendarAlt, FaChartBar, FaGlobe, FaTimes, FaInfoCircle
 } from "react-icons/fa";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, getDoc } from "firebase/firestore";
 import { db } from "../services/firebase";
 import type { TeamUser } from "../interfaces/User";
 import { useAuth } from '../contexts/AuthContext';
+
+interface LoginSession {
+    userId: string;
+    teamName: string;
+    playerName: string;
+    role: string;
+    loginTime: any; // Firestore timestamp
+    logoutTime?: any;
+    isActive: boolean;
+    ipAddress?: string;
+    userAgent?: string;
+}
 
 export const Login = () => {
     const [lang, setLang] = useState<"en" | "fr">(() => {
@@ -106,70 +118,182 @@ export const Login = () => {
         return Object.keys(newErrors).length === 0;
     };
 
+    // const handleSubmit = async (e: React.FormEvent) => {
+    //     e.preventDefault();
+    //     if (!validateForm()) {
+    //         setShake(true);
+    //         return;
+    //     }
+
+    //     setIsLoading(true);
+
+    //     try {
+    //         const userQuery = query(
+    //             collection(db, "users"),
+    //             where("team", "==", teamName),
+    //             where("player", "==", playerName)
+    //         );
+    //         const snapshot = await getDocs(userQuery);
+
+    //         if (snapshot.empty) {
+    //             throw new Error("Invalid credentials");
+    //         }
+
+    //         const userDoc = snapshot.docs[0];
+    //         const docData = userDoc.data() as TeamUser;
+
+    //         // For production → hash check
+    //         if (docData.password !== password) {
+    //             throw new Error("Invalid credentials");
+    //         }
+
+    //         // Build login session
+    //         const loginSession: Omit<LoginSession, "id"> = {
+    //             userId: userDoc.id,
+    //             teamName: docData.team,
+    //             playerName: docData.player,
+    //             role: docData.role,
+    //             loginTime: new Date().toISOString(), 
+    //             isActive: true,
+    //         };
+
+    //         const sessionRef = await addDoc(collection(db, "loginSessions"), loginSession);
+
+    //         const newSessionDoc = await getDoc(sessionRef);
+    //         console.log("Session created:", newSessionDoc.exists(), newSessionDoc.data());
+
+    //         // Save session info locally
+    //         const sessionData = {
+    //             userId: userDoc.id,
+    //             sessionId: sessionRef.id,
+    //             userData: docData,
+    //             loginTime: Date.now(),
+    //         };
+    //         localStorage.setItem("session", JSON.stringify(sessionData));
+
+    //         // Remember credentials if requested
+    //         if (rememberMe) {
+    //             localStorage.setItem(
+    //                 "rememberedCredentials",
+    //                 JSON.stringify({ team: teamName, player: playerName })
+    //             );
+    //         } else {
+    //             localStorage.removeItem("rememberedCredentials");
+    //         }
+
+    //         // Use auth context
+    //         login(docData);
+
+    //         // Role-based navigation
+    //         navigate("/dashboard", { state: { user: docData, lang } });
+    //     } catch (err) {
+    //         console.error("Login error:", err);
+    //         setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
+    //         setShake(true);
+    //         setTimeout(() => setShake(false), 500);
+    //     } finally {
+    //         setIsLoading(false);
+    //     }
+    // };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!validateForm()) return setShake(true);
+        if (!validateForm()) {
+            setShake(true);
+            return;
+        }
 
         setIsLoading(true);
 
         try {
+            // Function to capitalize each word properly
+            const capitalizeEachWord = (str: string) => {
+                return str.trim()
+                    .toLowerCase()
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+            };
+
+            const normalizedTeamName = capitalizeEachWord(teamName);
+            const normalizedPlayerName = capitalizeEachWord(playerName);
+
+            console.log("Querying with:", {
+                team: normalizedTeamName,
+                player: normalizedPlayerName
+            });
+
             const userQuery = query(
                 collection(db, "users"),
-                where("team", "==", teamName),
-                where("player", "==", playerName)
+                where("team", "==", normalizedTeamName),
+                where("player", "==", normalizedPlayerName)
             );
+
             const snapshot = await getDocs(userQuery);
 
-            if (!snapshot.empty) {
-                const docData = snapshot.docs[0].data() as TeamUser;
+            console.log("Query results:", snapshot.size, "documents found");
 
-                // For production, compare hashed passwords
-                if (docData.password === password) {
-                    // Save credentials if rememberMe
-                    if (rememberMe) {
-                        localStorage.setItem(
-                            "rememberedCredentials",
-                            JSON.stringify({ team: teamName, player: playerName })
-                        );
-                    } else {
-                        localStorage.removeItem("rememberedCredentials");
-                    }
-
-                    setIsLoading(false);
-
-                    // Use the auth context login function
-                    login(docData);
-
-                    // Role-based navigation
-                    switch (docData.role) {
-                        case "admin":
-                            navigate("/dashboard", { state: { user: docData, lang } });
-                            break;
-                        case "referee":
-                            navigate("/dashboard", { state: { user: docData, lang } });
-                            break;
-                        case "player":
-                        default:
-                            navigate("/dashboard", { state: { user: docData, lang } });
-                            break;
-                    }
-                } else {
-                    setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
-                    setShake(true);
-                    setTimeout(() => setShake(false), 500);
-                    setIsLoading(false);
-                }
-            } else {
-                setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
-                setShake(true);
-                setTimeout(() => setShake(false), 500);
-                setIsLoading(false);
+            if (snapshot.empty) {
+                console.log("No user found with these credentials");
+                throw new Error("Invalid credentials");
             }
+
+            const userDoc = snapshot.docs[0];
+            const docData = userDoc.data() as TeamUser;
+
+            console.log("User found:", docData);
+
+            // For production → hash check
+            if (docData.password !== password) {
+                console.log("Password mismatch");
+                throw new Error("Invalid credentials");
+            }
+
+            // Build login session
+            const loginSession: Omit<LoginSession, "id"> = {
+                userId: userDoc.id,
+                teamName: docData.team,
+                playerName: docData.player,
+                role: docData.role,
+                loginTime: new Date().toISOString(),
+                isActive: true,
+            };
+
+            const sessionRef = await addDoc(collection(db, "loginSessions"), loginSession);
+
+            const newSessionDoc = await getDoc(sessionRef);
+            console.log("Session created:", newSessionDoc.exists(), newSessionDoc.data());
+
+            // Save session info locally
+            const sessionData = {
+                userId: userDoc.id,
+                sessionId: sessionRef.id,
+                userData: docData,
+                loginTime: Date.now(),
+            };
+            localStorage.setItem("session", JSON.stringify(sessionData));
+
+            // Remember credentials if requested - use normalized names
+            if (rememberMe) {
+                localStorage.setItem(
+                    "rememberedCredentials",
+                    JSON.stringify({ team: normalizedTeamName, player: normalizedPlayerName })
+                );
+            } else {
+                localStorage.removeItem("rememberedCredentials");
+            }
+
+            // Use auth context
+            login(docData);
+
+            // Role-based navigation
+            navigate("/dashboard", { state: { user: docData, lang } });
         } catch (err) {
             console.error("Login error:", err);
             setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
             setShake(true);
             setTimeout(() => setShake(false), 500);
+        } finally {
             setIsLoading(false);
         }
     };
@@ -210,6 +334,16 @@ export const Login = () => {
                                     <div className="absolute left-3 top-3 text-gray-400">
                                         <FaUsers />
                                     </div>
+                                    {/* <input
+                                        type="text"
+                                        className={`pl-10 w-full px-4 py-3 border ${errors.team ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
+                                        placeholder={t.team}
+                                        value={teamName}
+                                        onChange={(e) => {
+                                            setTeamName(e.target.value);
+                                            if (errors.team) setErrors({ ...errors, team: undefined });
+                                        }}
+                                    /> */}
                                     <input
                                         type="text"
                                         className={`pl-10 w-full px-4 py-3 border ${errors.team ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
@@ -218,6 +352,16 @@ export const Login = () => {
                                         onChange={(e) => {
                                             setTeamName(e.target.value);
                                             if (errors.team) setErrors({ ...errors, team: undefined });
+                                        }}
+                                        onBlur={(e) => {
+                                            const capitalizeEachWord = (str: string) => {
+                                                return str.trim()
+                                                    .toLowerCase()
+                                                    .split(' ')
+                                                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                                    .join(' ');
+                                            };
+                                            setTeamName(capitalizeEachWord(e.target.value));
                                         }}
                                     />
                                 </div>
@@ -230,6 +374,16 @@ export const Login = () => {
                                     <div className="absolute left-3 top-3 text-gray-400">
                                         <FaUser />
                                     </div>
+                                    {/* <input
+                                        type="text"
+                                        className={`pl-10 w-full px-4 py-3 border ${errors.player ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
+                                        placeholder={t.player}
+                                        value={playerName}
+                                        onChange={(e) => {
+                                            setPlayerName(e.target.value);
+                                            if (errors.player) setErrors({ ...errors, player: undefined });
+                                        }}
+                                    /> */}
                                     <input
                                         type="text"
                                         className={`pl-10 w-full px-4 py-3 border ${errors.player ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
@@ -238,6 +392,16 @@ export const Login = () => {
                                         onChange={(e) => {
                                             setPlayerName(e.target.value);
                                             if (errors.player) setErrors({ ...errors, player: undefined });
+                                        }}
+                                        onBlur={(e) => {
+                                            const capitalizeEachWord = (str: string) => {
+                                                return str.trim()
+                                                    .toLowerCase()
+                                                    .split(' ')
+                                                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                                    .join(' ');
+                                            };
+                                            setPlayerName(capitalizeEachWord(e.target.value));
                                         }}
                                     />
                                 </div>
