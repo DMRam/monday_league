@@ -148,7 +148,7 @@ export const Dashboard = () => {
     const standings = teams ? [...teams].sort((a, b) => b.totalPoints - a.totalPoints) : [];
 
 
-    console.log("Current Week Matches: ", currentWeekMatches)
+    console.log("Current Week Matches: ", currentWeekMatches, currentWeek)
     // Reorder tabs: Matches first, then Dashboard
     const renderContent = () => {
         if (activeTab === 'admin') {

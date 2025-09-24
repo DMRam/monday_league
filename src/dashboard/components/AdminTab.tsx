@@ -1,4 +1,19 @@
+import { useEffect, useState } from 'react';
 import type { AdminTabProps } from '../../interfaces/AdminTab';
+import { db } from "../../services/firebase"; // adjust path
+import { collection, getDocs } from 'firebase/firestore';
+import { useMemo } from "react";
+
+interface LoginSession {
+    id: string;
+    isActive: boolean;
+    loginTime: any;
+    playerName: string;
+    role: string;
+    teamName: string;
+    userId: string;
+}
+
 
 export const AdminTab = ({
     addPlayerToTeamForm,
@@ -23,6 +38,67 @@ export const AdminTab = ({
     teams,
     matches,
     setMatches }: AdminTabProps) => {
+    const [loginSessions, setLoginSessions] = useState<LoginSession[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchSessions = async () => {
+            const snapshot = await getDocs(collection(db, "loginSessions"));
+            const sessions = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            })) as LoginSession[];
+            setLoginSessions(sessions);
+        };
+
+        fetchSessions();
+    }, []);
+
+
+    const fetchSessions = async () => {
+        setLoading(true);
+        try {
+            const snapshot = await getDocs(collection(db, "loginSessions"));
+            const sessions = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            })) as LoginSession[];
+            setLoginSessions(sessions);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const groupedSessions = useMemo(() => {
+        const map = new Map<string, { teamName: string; role: string; count: number; lastLogin: Date }>();
+
+        loginSessions.forEach(session => {
+            const loginDate = session.loginTime?.toDate
+                ? session.loginTime.toDate()
+                : new Date(session.loginTime);
+
+            if (!map.has(session.playerName)) {
+                map.set(session.playerName, {
+                    teamName: session.teamName,
+                    role: session.role,
+                    count: 1,
+                    lastLogin: loginDate,
+                });
+            } else {
+                const entry = map.get(session.playerName)!;
+                entry.count += 1;
+                if (loginDate > entry.lastLogin) {
+                    entry.lastLogin = loginDate;
+                }
+            }
+        });
+
+        return Array.from(map.entries()).map(([playerName, data]) => ({
+            playerName,
+            ...data,
+        }));
+    }, [loginSessions]);
+
     return (
         <div className="space-y-8">
             {/* Team Creation Form */}
@@ -136,6 +212,81 @@ export const AdminTab = ({
                     </div>
                 )}
             </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        Login Sessions
+                    </h2>
+                    <button
+                        onClick={fetchSessions}
+                        disabled={loading}
+                        className={`px-4 py-2 rounded-xl shadow-sm transition ${loading
+                            ? "bg-gray-400 text-white cursor-not-allowed"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
+                            }`}
+                    >
+                        {loading ? "Loading..." : "Load Sessions"}
+                    </button>
+
+
+
+                </div>
+
+                {loginSessions.length > 0 && (
+                    <div className="space-y-4">
+                        <p className="text-gray-600">
+                            Total Sessions:{" "}
+                            <span className="font-semibold text-gray-900">
+                                {loginSessions.length}
+                            </span>
+                        </p>
+
+                        <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+                            <table className="min-w-full border-collapse">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Player</th>
+                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Team</th>
+                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Role</th>
+                                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Sessions</th>
+                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Last Login</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {groupedSessions.map((user) => (
+                                        <tr key={user.playerName} className="hover:bg-gray-50 transition">
+                                            <td className="px-4 py-3 text-gray-900 font-medium">{user.playerName}</td>
+                                            <td className="px-4 py-3 text-gray-700">{user.teamName}</td>
+                                            <td className="px-4 py-3">
+                                                <span
+                                                    className={`px-2 py-1 text-xs font-medium rounded-full ${user.role === "coach"
+                                                        ? "bg-blue-100 text-blue-700"
+                                                        : "bg-green-100 text-green-700"
+                                                        }`}
+                                                >
+                                                    {user.role}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className="bg-gray-100 text-gray-800 text-sm px-2 py-1 rounded-lg">
+                                                    {user.count}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-600 text-sm">
+                                                {user.lastLogin.toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+            </div>
+
         </div>
     )
 }

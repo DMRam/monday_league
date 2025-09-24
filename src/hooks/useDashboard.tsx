@@ -4,6 +4,7 @@ import { db } from '../services/firebase';
 import type { Match, Team, TeamWeekStats } from '../interfaces/Dashboards';
 import type { TeamUser } from '../interfaces/User';
 import { doc, updateDoc, setDoc, collection, query, where, getDocs, addDoc } from "firebase/firestore";
+import { v4 as uuidv4 } from 'uuid';
 
 type SetString = Dispatch<SetStateAction<string>>;
 type SetStringArray = Dispatch<SetStateAction<string[]>>;
@@ -13,6 +14,14 @@ export const useDashboard = () => {
     const normalizeString = (str?: string): string => {
         if (!str) return '';
         return str.toLowerCase().trim().replace(/\s+/g, '');
+    };
+
+    const createMatch = async (week: number, matchData: any, period: number) => {
+        const id = `W${week}_P${period}${uuidv4()}`;
+        await setDoc(doc(db, "matches", id), {
+            ...matchData,
+            week,
+        });
     };
 
 
@@ -180,14 +189,31 @@ export const useDashboard = () => {
                 const matchDate = createMatchDate(slot);
 
                 const startTime = matchDate.getTime();
-                const endTime = startTime + 20 * 60 * 1000;
+                const endTime = startTime + 25 * 60 * 1000;
 
-                await addDoc(collection(db, 'matches'), {
-                    week,
+
+
+                // await addDoc(collection(db, 'matches'), {
+                //     week,
+                //     pool: poolLabel,
+                //     teamA: pool[a].name,
+                //     teamB: pool[b].name,
+                //     referee: pool[r].name,
+                //     scoreA: 0,
+                //     scoreB: 0,
+                //     completed: false,
+                //     startTime,
+                //     endTime,
+                //     gym,
+                //     timeSlot: slot.time,
+                //     matchNumber: i + 1,
+                // });
+
+                await createMatch(week, {
                     pool: poolLabel,
                     teamA: pool[a].name,
                     teamB: pool[b].name,
-                    referee: pool[r].name, // Referee any of the third Team
+                    referee: pool[r].name,
                     scoreA: 0,
                     scoreB: 0,
                     completed: false,
@@ -196,7 +222,9 @@ export const useDashboard = () => {
                     gym,
                     timeSlot: slot.time,
                     matchNumber: i + 1,
-                });
+                    isSecondPeriod: false,
+                }, 1);
+
                 const userQuery = query(
                     collection(db, "users"),
                     where("name", "==", pool[r].coach)
@@ -222,136 +250,184 @@ export const useDashboard = () => {
         setMatches: (value: React.SetStateAction<Match[]>) => void
     ) => {
         console.log("=== Generating Second Period Matches ===");
-        console.log("Week:", week);
+        console.log("Target week:", week);
 
-        // Filter first-period matches
-        const firstPeriodMatches = matches.filter(m => m.week === week && !m.isSecondPeriod);
-        console.log("First-period matches:", firstPeriodMatches);
+        try {
+            // 1. Validate that we have teams
+            if (!teams || teams.length < 6) {
+                console.warn("Not enough teams to generate second period matches. Need at least 6 teams.");
+                return;
+            }
 
-        // Ensure all first-period matches are completed
-        const allFirstPeriodDone = firstPeriodMatches.every(m => m.completed);
-        console.log("All first-period matches completed?", allFirstPeriodDone);
-        if (!allFirstPeriodDone) return;
+            // 2. Check if first period matches exist for this week
+            const firstPeriodMatches = matches.filter(m =>
+                m.week === week &&
+                !m.isSecondPeriod
+            );
 
-        // Calculate points for each team
-        const teamPoints: Record<string, number> = {};
-        firstPeriodMatches.forEach(m => {
-            teamPoints[m.teamA] = (teamPoints[m.teamA] || 0) + m.scoreA;
-            teamPoints[m.teamB] = (teamPoints[m.teamB] || 0) + m.scoreB;
-        });
-        console.log("Team points after first period:", teamPoints);
+            console.log(`First-period matches for week ${week}:`, firstPeriodMatches);
 
-        // Sort teams by points and split into second-period pools
-        const sortedTeams = [...teams].sort((a, b) => (teamPoints[b.name] || 0) - (teamPoints[a.name] || 0));
-        const pool1Teams = sortedTeams.slice(0, 3); // Positions 1, 2, 3
-        const pool2Teams = sortedTeams.slice(3, 6); // Positions 4, 5, 6
+            if (firstPeriodMatches.length === 0) {
+                console.log(`❌ No first period matches found for week ${week}. Generate first period matches first.`);
+                alert(`Please generate first period matches for Week ${week} before generating second period matches.`);
+                return;
+            }
 
-        console.log("Pool 1 teams (positions 1-3):", pool1Teams.map((t, i) => `${i + 1}. ${t.name}`));
-        console.log("Pool 2 teams (positions 4-6):", pool2Teams.map((t, i) => `${i + 4}. ${t.name}`));
+            // 3. Check if second period matches already exist for this week
+            const existingSecondPeriodMatches = matches.filter(m =>
+                m.week === week &&
+                m.isSecondPeriod
+            );
 
-        if (pool1Teams.length < 3 || pool2Teams.length < 3) {
-            console.warn("Not enough teams to generate second period matches.");
-            return;
-        }
+            if (existingSecondPeriodMatches.length > 0) {
+                console.log("✅ Second period matches already exist for week", week);
+                alert(`Second period matches for Week ${week} have already been generated.`);
+                return;
+            }
 
-        // Define match slots
-        const slots = [
-            { time: '21:50', hour: 21, minute: 50 },
-            { time: '22:10', hour: 22, minute: 10 },
-            { time: '22:30', hour: 22, minute: 30 },
-        ];
+            // 4. Ensure all first-period matches are completed
+            const allFirstPeriodDone = firstPeriodMatches.every(m => m.completed);
+            console.log("All first-period matches completed?", allFirstPeriodDone);
 
-        const createMatchDate = (slot: { hour: number; minute: number }) => {
-            const matchDate = new Date();
-            matchDate.setDate(matchDate.getDate() + (week - 1) * 7);
-            matchDate.setHours(slot.hour, slot.minute, 0, 0);
-            return matchDate;
-        };
+            if (!allFirstPeriodDone) {
+                const incompleteMatches = firstPeriodMatches.filter(m => !m.completed);
+                console.log(`⏳ Cannot generate second period matches - ${incompleteMatches.length} first period matches are not completed`);
+                alert(`Please complete all first period matches for Week ${week} before generating second period matches.`);
+                return;
+            }
 
-        // Helper: generate matches according to specific position-based pairing
-        const generatePoolMatches = async (poolTeams: Team[], poolLabel: string, gym: string, positionOffset: number) => {
-            // Teams are already sorted by position (index 0 = highest rank, index 2 = lowest rank in pool)
-            const matchesConfig = [
-                {
-                    teamAIndex: 0,  // Position 1 or 4
-                    teamBIndex: 2,  // Position 3 or 6
-                    refereeIndex: 1 // Position 2 or 5
-                },
-                {
-                    teamAIndex: 2,  // Position 3 or 6
-                    teamBIndex: 1,  // Position 2 or 5
-                    refereeIndex: 0 // Position 1 or 4
-                },
-                {
-                    teamAIndex: 0,  // Position 1 or 4
-                    teamBIndex: 1,  // Position 2 or 5
-                    refereeIndex: 2 // Position 3 or 6
-                }
+            // 5. Calculate points for each team
+            const teamPoints: Record<string, number> = {};
+            firstPeriodMatches.forEach(m => {
+                teamPoints[m.teamA] = (teamPoints[m.teamA] || 0) + m.scoreA;
+                teamPoints[m.teamB] = (teamPoints[m.teamB] || 0) + m.scoreB;
+            });
+            console.log("Team points after first period:", teamPoints);
+
+            // 6. Sort teams by points and split into second-period pools
+            const sortedTeams = [...teams].sort((a, b) => (teamPoints[b.name] || 0) - (teamPoints[a.name] || 0));
+            const pool1Teams = sortedTeams.slice(0, 3); // Positions 1, 2, 3
+            const pool2Teams = sortedTeams.slice(3, 6); // Positions 4, 5, 6
+
+            console.log("Pool 1 teams (positions 1-3):", pool1Teams.map((t, i) => `${i + 1}. ${t.name} (${teamPoints[t.name] || 0} pts)`));
+            console.log("Pool 2 teams (positions 4-6):", pool2Teams.map((t, i) => `${i + 4}. ${t.name} (${teamPoints[t.name] || 0} pts)`));
+
+            if (pool1Teams.length < 3 || pool2Teams.length < 3) {
+                console.warn("Not enough teams to generate second period matches.");
+                alert("Not enough teams to generate second period matches. Need at least 6 teams.");
+                return;
+            }
+
+            // 7. Define match slots (later times for second period)
+            const slots = [
+                { time: '22:40', hour: 22, minute: 40 },
+                { time: '23:00', hour: 23, minute: 0 },
+                { time: '23:20', hour: 23, minute: 20 },
             ];
 
-            for (let i = 0; i < matchesConfig.length; i++) {
-                const config = matchesConfig[i];
-                const slot = slots[i];
-                const matchDate = createMatchDate(slot);
+            const createMatchDate = (slot: { hour: number; minute: number }) => {
+                const matchDate = new Date();
+                matchDate.setDate(matchDate.getDate() + (week - 1) * 7);
+                matchDate.setHours(slot.hour, slot.minute, 0, 0);
+                return matchDate;
+            };
 
-                const teamA = poolTeams[config.teamAIndex];
-                const teamB = poolTeams[config.teamBIndex];
-                const refereeTeam = poolTeams[config.refereeIndex];
+            // 8. Helper: generate matches according to specific position-based pairing
+            const generatePoolMatches = async (poolTeams: Team[], poolLabel: string, gym: string, positionOffset: number) => {
+                const matchesConfig = [
+                    {
+                        teamAIndex: 0,  // Position 1 or 4
+                        teamBIndex: 2,  // Position 3 or 6
+                        refereeIndex: 1 // Position 2 or 5
+                    },
+                    {
+                        teamAIndex: 2,  // Position 3 or 6
+                        teamBIndex: 1,  // Position 2 or 5
+                        refereeIndex: 0 // Position 1 or 4
+                    },
+                    {
+                        teamAIndex: 0,  // Position 1 or 4
+                        teamBIndex: 1,  // Position 2 or 5
+                        refereeIndex: 2 // Position 3 or 6
+                    }
+                ];
 
-                console.log(`Creating match in ${poolLabel}:`, {
-                    match: i + 1,
-                    teamA: `${config.teamAIndex + 1 + positionOffset} (${teamA.name})`,
-                    teamB: `${config.teamBIndex + 1 + positionOffset} (${teamB.name})`,
-                    referee: `${config.refereeIndex + 1 + positionOffset} (${refereeTeam.name})`,
-                    time: slot.time
-                });
+                for (let i = 0; i < matchesConfig.length; i++) {
+                    const config = matchesConfig[i];
+                    const slot = slots[i];
+                    const matchDate = createMatchDate(slot);
 
-                // Add match to Firestore
-                await addDoc(collection(db, 'matches'), {
-                    week,
-                    pool: poolLabel,
-                    teamA: teamA.name,
-                    teamB: teamB.name,
-                    referee: refereeTeam.name,
-                    scoreA: 0,
-                    scoreB: 0,
-                    completed: false,
-                    startTime: matchDate.getTime(),
-                    endTime: matchDate.getTime() + 20 * 60 * 1000,
-                    gym,
-                    timeSlot: slot.time,
-                    matchNumber: i + 1,
-                    isSecondPeriod: true
-                });
+                    const teamA = poolTeams[config.teamAIndex];
+                    const teamB = poolTeams[config.teamBIndex];
+                    const refereeTeam = poolTeams[config.refereeIndex];
 
-                // Assign referee role to the coach of the referee team
-                const userQuery = query(
-                    collection(db, "users"),
-                    where("name", "==", refereeTeam.coach)
-                );
-                const userSnap = await getDocs(userQuery);
-
-                userSnap.forEach(async (docSnap) => {
-                    await updateDoc(doc(db, "users", docSnap.id), {
-                        role: "referee",
+                    console.log(`Creating second period match in ${poolLabel}:`, {
+                        match: i + 1,
+                        teamA: `${config.teamAIndex + 1 + positionOffset} (${teamA.name})`,
+                        teamB: `${config.teamBIndex + 1 + positionOffset} (${teamB.name})`,
+                        referee: `${config.refereeIndex + 1 + positionOffset} (${refereeTeam.name})`,
+                        time: slot.time
                     });
-                });
-            }
-        };
 
-        // Generate matches for both pools with position offsets
-        await generatePoolMatches(pool1Teams, "Second Period - Premier Pool", "Gym 1", 0); // Positions 1-3
-        await generatePoolMatches(pool2Teams, "Second Period - Secondary Pool", "Gym 2", 3); // Positions 4-6
+                    // Calculate match number (continue from first period matches)
+                    const matchNumber = firstPeriodMatches.length + i + 1;
 
-        // Fetch updated matches and set state
-        const snapshot = await getDocs(collection(db, 'matches'));
-        const fetchedMatches: Match[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-        } as Match));
-        console.log("Fetched matches after 2nd period generation:", fetchedMatches);
+                    await createMatch(week, {
+                        pool: poolLabel,
+                        teamA: teamA.name,
+                        teamB: teamB.name,
+                        referee: refereeTeam.name,
+                        scoreA: 0,
+                        scoreB: 0,
+                        completed: false,
+                        startTime: matchDate.getTime(),
+                        endTime: matchDate.getTime() + 25 * 60 * 1000,
+                        gym,
+                        timeSlot: slot.time,
+                        matchNumber: matchNumber,
+                        isSecondPeriod: true,
+                    }, 2);
 
-        setMatches(sortMatches(fetchedMatches));
+                    // Assign referee role to the coach of the referee team
+                    try {
+                        const userQuery = query(
+                            collection(db, "users"),
+                            where("name", "==", refereeTeam.coach)
+                        );
+                        const userSnap = await getDocs(userQuery);
+
+                        userSnap.forEach(async (docSnap) => {
+                            await updateDoc(doc(db, "users", docSnap.id), {
+                                role: "referee",
+                            });
+                        });
+                    } catch (error) {
+                        console.warn(`Could not assign referee role for ${refereeTeam.coach}:`, error);
+                    }
+                }
+            };
+
+            // 9. Generate matches for both pools with position offsets
+            await generatePoolMatches(pool1Teams, "Second Period - Premier Pool", "Gym 1", 0); // Positions 1-3
+            await generatePoolMatches(pool2Teams, "Second Period - Secondary Pool", "Gym 2", 3); // Positions 4-6
+
+            // 10. Fetch updated matches and set state
+            const snapshot = await getDocs(collection(db, 'matches'));
+            const fetchedMatches: Match[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            } as Match));
+
+            console.log("Fetched matches after 2nd period generation:", fetchedMatches);
+            setMatches(sortMatches(fetchedMatches));
+
+            console.log(`✅ Second period matches generated for week ${week}`);
+            alert(`Second period matches for Week ${week} generated successfully!`);
+
+        } catch (error) {
+            console.error("Error generating second period matches:", error);
+            alert("Error generating second period matches. Please check the console for details.");
+        }
     };
 
     // Match editing with referee team validation
