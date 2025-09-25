@@ -153,13 +153,28 @@ export const useDashboard = () => {
         }
     };
 
+    const seededRandom = (seed: number) => {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+    };
+
+    const shuffleWithSeed = (array: Team[], seed: number) => {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(seededRandom(seed + i) * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    };
+
 
     const generateMatchesForWeek = async (week: number, teams: Team[]) => {
         if (teams.length < 5) {
             throw new Error("Need at least 6 teams to generate matches");
         }
 
-        const shuffled = [...teams].sort(() => Math.random() - 0.5);
+        const shuffled = shuffleWithSeed(teams, week);
+
         const pool1 = shuffled.slice(0, 3);
         const pool2 = shuffled.slice(3, 6);
 

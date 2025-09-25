@@ -1,6 +1,5 @@
-// Dashboard.tsx
 import { useState, useEffect } from 'react';
-import { FaVolleyballBall, FaSignOutAlt } from 'react-icons/fa';
+import { FaVolleyballBall, FaSignOutAlt, FaGlobe } from 'react-icons/fa';
 import { db } from '../services/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { useDashboard } from '../hooks/useDashboard';
@@ -9,8 +8,7 @@ import { AdminTab } from './components/AdminTab';
 import { ActiveTabsRenderer } from './components/ActiveTabs';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
-// import { initializeTeams } from '../admin/UpdateTeamPlayers';
-// import { initializeUsers } from '../admin/CreateUsers';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export const Dashboard = () => {
     const {
@@ -24,17 +22,8 @@ export const Dashboard = () => {
         sortMatches
     } = useDashboard();
 
-    // const [initializationStatus, setInitializationStatus] = useState<string>('');
-    // const [initializing, setInitializing] = useState(false);
-
-
-
-    // initializeUsers()
-    // initializeTeams()
-
     const { user, logout } = useAuth();
-
-    console.log('User: ', user)
+    const { language, setLanguage, t } = useLanguage();
     const navigate = useNavigate();
 
     const [currentWeek, setCurrentWeek] = useState(1);
@@ -54,22 +43,6 @@ export const Dashboard = () => {
     // Match creation state
     const [showMatchCreation, setShowMatchCreation] = useState(false);
     const [weeksToGenerate, setWeeksToGenerate] = useState(6);
-
-    // const handleManualInitialize = async () => {
-    //     if (user?.role !== 'admin') return;
-
-    //     setInitializing(true);
-    //     setInitializationStatus('Initializing...');
-
-    //     try {
-    //         const result = await initializeUsers();
-    //         setInitializationStatus(result.success ? '✅ Initialization successful!' : 'ℹ️ ' + result.message);
-    //     } catch (error) {
-    //         setInitializationStatus('❌ Initialization failed: ' + error);
-    //     } finally {
-    //         setInitializing(false);
-    //     }
-    // };
 
     useEffect(() => {
         const fetchTeams = async () => {
@@ -105,8 +78,6 @@ export const Dashboard = () => {
             }
         };
 
-        console.log("TEAM LENGTH!!!! ", teams.length)
-
         const fetchMatches = async () => {
             try {
                 const snapshot = await getDocs(collection(db, 'matches'));
@@ -136,6 +107,10 @@ export const Dashboard = () => {
         navigate("/", { replace: true });
     };
 
+    const toggleLanguage = () => {
+        setLanguage(language === 'en' ? 'fr' : 'en');
+    };
+
     // Week navigation
     const nextWeek = () => setCurrentWeek(currentWeek + 1);
     const prevWeek = () => setCurrentWeek(Math.max(1, currentWeek - 1));
@@ -147,9 +122,6 @@ export const Dashboard = () => {
     const currentWeekMatches = matches.filter(match => match.week === currentWeek);
     const standings = teams ? [...teams].sort((a, b) => b.totalPoints - a.totalPoints) : [];
 
-
-    console.log("Current Week Matches: ", currentWeekMatches, currentWeek)
-    // Reorder tabs: Matches first, then Dashboard
     const renderContent = () => {
         if (activeTab === 'admin') {
             return (
@@ -176,6 +148,7 @@ export const Dashboard = () => {
                     showMatchCreation={showMatchCreation}
                     teams={teams}
                     weeksToGenerate={weeksToGenerate}
+                    t={t.dashboard}
                 />
             );
         }
@@ -201,12 +174,13 @@ export const Dashboard = () => {
                 teams={teams}
                 updateMatchScore={updateMatchScore}
                 user={user}
+                t={t.dashboard}
             />
         );
     };
 
     if (loading) {
-        return <div className="min-h-screen bg-gray-100 flex items-center justify-center">Loading...</div>;
+        return <div className="min-h-screen bg-gray-100 flex items-center justify-center">{t.dashboard.loading}</div>;
     }
 
     return (
@@ -215,42 +189,47 @@ export const Dashboard = () => {
                 <div className="container mx-auto px-4 py-3 flex justify-between items-center">
                     <div className="flex items-center">
                         <FaVolleyballBall className="text-2xl text-orange-400 mr-2" />
-                        <h1 className="text-2xl font-bold">Volleyball League</h1>
+                        <h1 className="text-2xl font-bold">{t.title}</h1>
                     </div>
-                    <div className="flex items-center">
-                        <span className="mr-4">Welcome, {user?.name}</span>
+                    <div className="flex items-center space-x-4">
+                        <button
+                            onClick={toggleLanguage}
+                            className="flex items-center space-x-1 text-white hover:text-orange-300 transition-colors px-3 py-1 rounded-full border border-white/30 hover:border-orange-300 text-sm"
+                            aria-label={language === 'en' ? 'Switch to French' : 'Passer en anglais'}
+                        >
+                            <FaGlobe className="text-xs" />
+                            <span className="font-medium">{language === 'en' ? 'FR' : 'EN'}</span>
+                        </button>
+                        <span className="mr-4">{t.dashboard.welcome}, {user?.name}</span>
                         <button
                             onClick={handleLogout}
                             className="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded-lg flex items-center transition"
                         >
-                            <FaSignOutAlt className="mr-2" /> Logout
+                            <FaSignOutAlt className="mr-2" /> {t.dashboard.logout}
                         </button>
                     </div>
                 </div>
                 <div className="container mx-auto px-4 mt-4">
                     <div className="flex overflow-x-auto space-x-2">
-                        {/* Matches tab first */}
                         <button
                             onClick={() => setActiveTab('matches')}
                             className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'matches' ? 'bg-white text-blue-800 font-semibold' : 'text-blue-200 hover:bg-blue-700'}`}
                         >
-                            Matches
+                            {t.dashboard.matches}
                         </button>
-                        {/* Dashboard and Teams combined */}
                         <button
                             onClick={() => setActiveTab('dashboard')}
                             className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'dashboard' ? 'bg-white text-blue-800 font-semibold' : 'text-blue-200 hover:bg-blue-700'}`}
                         >
-                            Dashboard
+                            {t.dashboard.dashboard}
                         </button>
                         <button
                             onClick={() => setActiveTab('teams')}
                             className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'players' ? 'bg-white text-blue-800 font-semibold' : 'text-blue-200 hover:bg-blue-700'}`}
                         >
-                            Teams
+                            {t.dashboard.teams}
                         </button>
 
-                        {/* Admin tab */}
                         <button
                             onClick={() => setActiveTab('admin')}
                             className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'admin'
@@ -261,7 +240,7 @@ export const Dashboard = () => {
                                 }`}
                             disabled={user?.role !== 'admin'}
                         >
-                            Admin
+                            {t.dashboard.admin}
                         </button>
                     </div>
                 </div>
@@ -270,21 +249,6 @@ export const Dashboard = () => {
             <div className="container mx-auto px-4 py-8">
                 {renderContent()}
             </div>
-
-            {/* {user?.role === 'admin' && (
-                <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded">
-                    <button
-                        onClick={handleManualInitialize}
-                        disabled={initializing}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded disabled:opacity-50"
-                    >
-                        {initializing ? 'Initializing...' : 'Initialize Users'}
-                    </button>
-                    {initializationStatus && (
-                        <p className="mt-2 text-sm">{initializationStatus}</p>
-                    )}
-                </div>
-            )} */}
         </div>
     );
 };

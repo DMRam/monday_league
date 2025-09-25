@@ -47,4 +47,5 @@ export interface AdminTabProps {
     teams: Team[] | undefined;
     setMatches: SetMatchArray;
     matches: Match[];
+    t:any
 }

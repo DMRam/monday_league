@@ -21,6 +21,5 @@ export interface ActiveTabsProps {
     setSelectedTeam: React.Dispatch<React.SetStateAction<Team | undefined>>
     setTeams: any;
     teams: Team[] | undefined
-
-
+    t: any;
 }

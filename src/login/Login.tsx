@@ -9,13 +9,14 @@ import { db } from "../services/firebase";
 import type { TeamUser } from "../interfaces/User";
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeString } from '../utils/stringUtils';
+import { useLanguage } from '../contexts/LanguageContext'; // Import the language context
 
 interface LoginSession {
     userId: string;
     teamName: string;
     playerName: string;
     role: string;
-    loginTime: any; // Firestore timestamp
+    loginTime: any;
     logoutTime?: any;
     isActive: boolean;
     ipAddress?: string;
@@ -23,63 +24,9 @@ interface LoginSession {
 }
 
 export const Login = () => {
-    const [lang, setLang] = useState<"en" | "fr">(() => {
-        const browserLang = navigator.language.split('-')[0];
-        return (browserLang === 'fr' || localStorage.getItem('preferredLang') === 'fr') ? 'fr' : 'en';
-    });
+    const { language, setLanguage, t } = useLanguage(); // Use the language context
     const { login } = useAuth();
-
-
-    const t = {
-        en: {
-            title: "Volleyball League Séminaire de Sherbrooke",
-            subtitle: "Sign in to access your team dashboard",
-            team: "Team Name",
-            player: "Player Name",
-            password: "Password",
-            signin: "Sign In",
-            welcome: "Welcome to the League",
-            description: "Access your team's dashboard, manage players, view schedules, and track statistics.",
-            playerMgmt: "Player Management",
-            schedule: "Schedule & Events",
-            stats: "Statistics & Analytics",
-            invalid: "Invalid credentials. Please try again.",
-            forgotPassword: "Forgot Password?",
-            rememberMe: "Remember me",
-            newUser: "New to the league?",
-            register: "Register your team",
-            loading: "Authenticating...",
-            or: "or",
-            features: "League Features",
-            contactAdmin: "Please contact the league administrator to reset your password",
-            adminContact: "Contact Administrator",
-            supportMessage: "If you're having trouble accessing your account, please reach out to your league administrator for assistance with password reset.",
-        },
-        fr: {
-            title: "Ligue de Volleyball Séminaire de Sherbrooke",
-            subtitle: "Connectez-vous pour accéder au tableau de votre équipe",
-            team: "Nom d'équipe",
-            player: "Nom du joueur",
-            password: "Mot de passe",
-            signin: "Se connecter",
-            welcome: "Bienvenue dans la Ligue",
-            description: "Accédez au tableau de votre équipe, gérez les joueurs, consultez les horaires et suivez les statistiques.",
-            playerMgmt: "Gestion des joueurs",
-            schedule: "Horaire & Événements",
-            stats: "Statistiques & Analyses",
-            invalid: "Identifiants invalides. Veuillez réessayer.",
-            forgotPassword: "Mot de passe oublié?",
-            rememberMe: "Se souvenir de moi",
-            newUser: "Nouveau dans la ligue?",
-            register: "Inscrivez votre équipe",
-            loading: "Authentification...",
-            or: "ou",
-            features: "Fonctionnalités de la Ligue",
-            contactAdmin: "Veuillez contacter l'administrateur de la ligue pour réinitialiser votre mot de passe",
-            adminContact: "Contacter l'administrateur",
-            supportMessage: "Si vous avez des difficultés à accéder à votre compte, veuillez contacter votre administrateur de ligue pour obtenir de l'aide pour la réinitialisation du mot de passe.",
-        },
-    }[lang];
+    const navigate = useNavigate();
 
     const [teamName, setTeamName] = useState("");
     const [playerName, setPlayerName] = useState("");
@@ -90,8 +37,6 @@ export const Login = () => {
     const [errors, setErrors] = useState<{ team?: string; player?: string; password?: string }>({});
     const [shake, setShake] = useState(false);
     const [showAdminModal, setShowAdminModal] = useState(false);
-
-    const navigate = useNavigate();
 
     // Load remembered credentials
     useEffect(() => {
@@ -107,18 +52,17 @@ export const Login = () => {
     const validateForm = () => {
         const newErrors: { team?: string; player?: string; password?: string } = {};
 
-        if (!teamName.trim()) newErrors.team = `${t.team} ${lang === 'en' ? 'is required' : 'est requis'}`;
-        if (!playerName.trim()) newErrors.player = `${t.player} ${lang === 'en' ? 'is required' : 'est requis'}`;
-        if (!password) newErrors.password = `${t.password} ${lang === 'en' ? 'is required' : 'est requis'}`;
+        if (!teamName.trim()) newErrors.team = `${t.team} ${language === 'en' ? 'is required' : 'est requis'}`;
+        if (!playerName.trim()) newErrors.player = `${t.player} ${language === 'en' ? 'is required' : 'est requis'}`;
+        if (!password) newErrors.password = `${t.password} ${language === 'en' ? 'is required' : 'est requis'}`;
         else if (password.length < 6)
-            newErrors.password = lang === 'en'
+            newErrors.password = language === 'en'
                 ? 'Password must be at least 6 characters'
                 : 'Le mot de passe doit contenir au moins 6 caractères';
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
-
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -138,7 +82,7 @@ export const Login = () => {
             console.log("Querying with:", {
                 team: normalizedTeamName,
                 player: normalizedPlayerName,
-                password: normalizedPassword // For debugging
+                password: normalizedPassword
             });
 
             const userQuery = query(
@@ -161,8 +105,7 @@ export const Login = () => {
 
             console.log("User found:", docData);
 
-            // IMPORTANT: Normalize the stored password for comparison
-            // If your stored passwords have accents, normalize them too
+            // Normalize the stored password for comparison
             const storedPasswordNormalized = normalizeString(docData.password);
 
             // Compare normalized passwords
@@ -211,7 +154,7 @@ export const Login = () => {
             login(docData);
 
             // Role-based navigation
-            navigate("/dashboard", { state: { user: docData, lang } });
+            navigate("/dashboard", { state: { user: docData, language } });
         } catch (err) {
             console.error("Login error:", err);
             setErrors({ team: t.invalid, player: t.invalid, password: t.invalid });
@@ -222,8 +165,11 @@ export const Login = () => {
         }
     };
 
+    const toggleLanguage = () => {
+        const newLang = language === 'en' ? 'fr' : 'en';
+        setLanguage(newLang);
+    };
 
-    const toggleLanguage = () => setLang(prev => prev === 'en' ? 'fr' : 'en');
     const handleForgotPassword = () => setShowAdminModal(true);
 
     return (
@@ -245,7 +191,7 @@ export const Login = () => {
                                 aria-label="Change language"
                             >
                                 <FaGlobe className="text-xs" />
-                                <span className="font-medium">{lang === 'en' ? 'FR' : 'EN'}</span>
+                                <span className="font-medium">{language === 'en' ? 'FR' : 'EN'}</span>
                             </button>
                         </div>
 
@@ -258,8 +204,6 @@ export const Login = () => {
                                     <div className="absolute left-3 top-3 text-gray-400">
                                         <FaUsers />
                                     </div>
-
-
                                     <input
                                         type="text"
                                         className={`pl-10 w-full px-4 py-3 border ${errors.team ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
@@ -283,8 +227,6 @@ export const Login = () => {
                                     <div className="absolute left-3 top-3 text-gray-400">
                                         <FaUser />
                                     </div>
-
-
                                     <input
                                         type="text"
                                         className={`pl-10 w-full px-4 py-3 border ${errors.player ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
@@ -322,7 +264,7 @@ export const Login = () => {
                                         type="button"
                                         className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        aria-label={showPassword ? "Hide password" : "Show password"}
+                                        aria-label={showPassword ? t.hidePassword : t.showPassword}
                                     >
                                         {showPassword ? <FaEyeSlash /> : <FaEye />}
                                     </button>
@@ -375,7 +317,6 @@ export const Login = () => {
                                     t.signin
                                 )}
                             </button>
-
                         </form>
                     </div>
 
@@ -430,55 +371,50 @@ export const Login = () => {
             </div>
 
             {/* Admin Contact Modal */}
-
-            {
-
-                showAdminModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
-                            <button onClick={() => setShowAdminModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                                <FaTimes className="text-xl" />
-                            </button>
-                            <div className="flex items-center mb-4">
-                                <div className="bg-blue-100 p-3 rounded-full mr-3">
-                                    <FaInfoCircle className="text-blue-600 text-xl" />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-800">{t.adminContact}</h3>
+            {showAdminModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+                        <button onClick={() => setShowAdminModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                            <FaTimes className="text-xl" />
+                        </button>
+                        <div className="flex items-center mb-4">
+                            <div className="bg-blue-100 p-3 rounded-full mr-3">
+                                <FaInfoCircle className="text-blue-600 text-xl" />
                             </div>
-                            <p className="text-gray-600 mb-2">{t.supportMessage}</p>
-                            <div className="bg-blue-50 p-4 rounded-lg mt-4">
-                                <p className="text-blue-800 font-medium">{t.contactAdmin}</p>
-                                <div className="mt-3 flex flex-col space-y-2">
-                                    <div className="flex items-center">
-                                        <span className="text-blue-700 font-medium mr-2">Email:</span>
-                                        <span className="text-blue-600">admin@volleyleague.example</span>
-                                    </div>
-                                    <div className="flex items-center">
-                                        <span className="text-blue-700 font-medium mr-2">Phone:</span>
-                                        <span className="text-blue-600">(555) 123-4567</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <button onClick={() => setShowAdminModal(false)} className="w-full mt-6 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                                {lang === 'en' ? 'Close' : 'Fermer'}
-                            </button>
+                            <h3 className="text-xl font-bold text-gray-800">{t.adminContact}</h3>
                         </div>
+                        <p className="text-gray-600 mb-2">{t.supportMessage}</p>
+                        <div className="bg-blue-50 p-4 rounded-lg mt-4">
+                            <p className="text-blue-800 font-medium">{t.contactAdmin}</p>
+                            <div className="mt-3 flex flex-col space-y-2">
+                                <div className="flex items-center">
+                                    <span className="text-blue-700 font-medium mr-2">Email:</span>
+                                    <span className="text-blue-600">admin@volleyleague.example</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span className="text-blue-700 font-medium mr-2">Phone:</span>
+                                    <span className="text-blue-600">(555) 123-4567</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowAdminModal(false)} className="w-full mt-6 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                            {language === 'en' ? 'Close' : 'Fermer'}
+                        </button>
                     </div>
-                )
+                </div>
+            )}
 
-            }
             <style>{`
-        .shake-animation {
-          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-        }
-        @keyframes shake {
-          10%, 90% { transform: translate3d(-1px, 0, 0); }
-          20%, 80% { transform: translate3d(2px, 0, 0); }
-          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-          40%, 60% { transform: translate3d(4px, 0, 0); }
-        }
-      `}</style>
-
+                .shake-animation {
+                    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+                }
+                @keyframes shake {
+                    10%, 90% { transform: translate3d(-1px, 0, 0); }
+                    20%, 80% { transform: translate3d(2px, 0, 0); }
+                    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+                    40%, 60% { transform: translate3d(4px, 0, 0); }
+                }
+            `}</style>
         </>
-    )
-}
+    );
+};

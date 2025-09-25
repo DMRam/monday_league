@@ -1,4 +1,5 @@
 import { format } from "date-fns"
+import { fr as frLocale, enUS as enLocale } from 'date-fns/locale';
 import { PoolDisplay } from "./PoolDisplay"
 import type { Match, Team, TeamWeekStats } from "../../interfaces/Dashboards"
 import { FaCalendarAlt, FaChartLine } from "react-icons/fa"
@@ -17,6 +18,7 @@ interface Props {
     setActiveTab: React.Dispatch<React.SetStateAction<string>>
     teams: Team[] | undefined
     weekStats: TeamWeekStats[]
+    t: any
 }
 
 export const DefaultCase = ({
@@ -28,22 +30,28 @@ export const DefaultCase = ({
     poolBTeamsFirstPeriod,
     poolBTeamsSecondPeriod,
     prevWeek,
-    setActiveTab,
     teams,
     weekStats,
+    t
 }: Props) => {
     const { getMatchDateForWeek } = useActiveTabs();
+
+    // Get appropriate date locale
+    const dateLocale = t.language === 'fr' ? frLocale : enLocale;
 
     // Separate completed and upcoming
     const recentMatches = matches
         .filter(m => m.completed)
         .sort((a, b) => b.startTime - a.startTime)
-        .slice(0, 5);
+        .slice(0, 6);
 
     const upcomingMatches = matches
         .filter(m => !m.completed)
         .sort((a, b) => a.startTime - b.startTime)
-        .slice(0, 5);
+        .slice(0, 6);
+
+    const matchDate = getMatchDateForWeek(currentWeek, '20:50');
+    const formattedDate = format(matchDate, "EEEE, MMM d", { locale: dateLocale });
 
     return (
         <div className="space-y-8">
@@ -51,7 +59,7 @@ export const DefaultCase = ({
             <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-gray-800">
-                        Week {currentWeek} Matches {format(getMatchDateForWeek(currentWeek, '20:50'), "EEEE, MMM d")}
+                        {t.week} {currentWeek} {t.matches} {formattedDate}
                     </h2>
                     <div className="flex space-x-4">
                         <button
@@ -60,14 +68,14 @@ export const DefaultCase = ({
                             className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={currentWeek === 1}
                         >
-                            Previous Week
+                            {t.previousWeek}
                         </button>
                         <button
                             type="button"
                             onClick={nextWeek}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
                         >
-                            Next Week
+                            {t.nextWeek}
                         </button>
                     </div>
                 </div>
@@ -75,19 +83,21 @@ export const DefaultCase = ({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* First Hour Pools */}
                     <div className="space-y-6">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">First Period (8:50 PM - 9:50 PM)</h3>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t.firstPeriod}</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <PoolDisplay
-                                title="Pool A"
+                                title={t.poolA}
                                 teams={poolATeamsFirstPeriod}
                                 colorClass="bg-blue-50"
                                 pointsBgClass="bg-blue-100 text-blue-800"
+                                t={t}
                             />
                             <PoolDisplay
-                                title="Pool B"
+                                title={t.poolB}
                                 teams={poolBTeamsFirstPeriod}
                                 colorClass="bg-orange-50"
                                 pointsBgClass="bg-orange-100 text-orange-800"
+                                t={t}
                             />
                         </div>
                     </div>
@@ -97,13 +107,12 @@ export const DefaultCase = ({
                         <div className="flex items-center">
                             <FaCalendarAlt className="text-blue-500 text-xl mr-2" />
                             <h3 className="text-lg font-semibold text-gray-800">
-                                Second Period (9:50 PM - 10:50 PM)
+                                {t.secondPeriod}
                             </h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <PoolDisplay
-                                title="Pool A"
-                                // description="Competing for 1st-3rd place"
+                                title={t.premierPool}
                                 teams={poolATeamsSecondPeriod
                                     .map(team => ({
                                         ...team,
@@ -112,10 +121,10 @@ export const DefaultCase = ({
                                     .sort((a, b) => b.currentDayPoints - a.currentDayPoints)}
                                 colorClass="bg-purple-50"
                                 pointsBgClass="bg-purple-100 text-purple-800"
+                                t={t}
                             />
                             <PoolDisplay
-                                title="Pool B"
-                                // description="Competing for 4th-6th place"
+                                title={t.secondaryPool}
                                 teams={poolBTeamsSecondPeriod
                                     .map(team => ({
                                         ...team,
@@ -124,6 +133,7 @@ export const DefaultCase = ({
                                     .sort((a, b) => b.currentDayPoints - a.currentDayPoints)}
                                 colorClass="bg-green-50"
                                 pointsBgClass="bg-green-100 text-green-800"
+                                t={t}
                             />
                         </div>
                     </div>
@@ -135,6 +145,7 @@ export const DefaultCase = ({
                 currentWeek={currentWeek}
                 teams={teams || []}
                 weekStats={weekStats}
+                t={t}
             />
 
             {/* Recent Matches + Upcoming Matches */}
@@ -144,9 +155,11 @@ export const DefaultCase = ({
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center">
                             <FaChartLine className="text-blue-500 text-xl mr-2" />
-                            <h3 className="text-xl font-bold text-gray-800">Recent Matches</h3>
+                            <h3 className="text-xl font-bold text-gray-800">{t.recentMatches}</h3>
                         </div>
-                        <span className="text-sm text-gray-500">{recentMatches.length} shown</span>
+                        <span className="text-sm text-gray-500">
+                            {recentMatches.length} {t.shown}
+                        </span>
                     </div>
 
                     <div className="space-y-3">
@@ -165,12 +178,12 @@ export const DefaultCase = ({
                                         </span>
                                     </div>
                                     <div className="text-xs text-gray-500 text-center">
-                                        Week {match.week} • {match.pool} • {match.gym}
+                                        {t.week} {match.week} • {match.pool} • {match.gym}
                                     </div>
                                 </div>
                             ))
                         ) : (
-                            <div className="text-center py-8 text-gray-500">No completed matches yet</div>
+                            <div className="text-center py-8 text-gray-500">{t.noCompletedMatches}</div>
                         )}
                     </div>
                 </div>
@@ -179,30 +192,36 @@ export const DefaultCase = ({
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center mb-6">
                         <FaCalendarAlt className="text-blue-500 text-xl mr-2" />
-                        <h3 className="text-xl font-bold text-gray-800">Upcoming Matches</h3>
+                        <h3 className="text-xl font-bold text-gray-800">{t.upcomingMatches}</h3>
                     </div>
                     <div className="space-y-3">
                         {upcomingMatches.length > 0 ? (
-                            upcomingMatches.map(match => (
-                                <div key={match.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
-                                            {match.teamA}
-                                        </span>
-                                        <span className="mx-4 text-gray-500 text-sm min-w-[60px] text-center">
-                                            vs
-                                        </span>
-                                        <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
-                                            {match.teamB}
-                                        </span>
+                            upcomingMatches.map(match => {
+                                const upcomingMatchDate = getMatchDateForWeek(match.week, match.timeSlot);
+                                const upcomingFormattedDate = format(upcomingMatchDate, "EEEE, MMM d", { locale: dateLocale });
+                                
+                                return (
+                                    <div key={match.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
+                                                {match.teamA}
+                                            </span>
+                                            <span className="mx-4 text-gray-500 text-sm min-w-[60px] text-center">
+                                                {t.vs}
+                                            </span>
+                                            <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
+                                                {match.teamB}
+                                            </span>
+                                        </div>
+
+                                        <div className="text-xs text-gray-500 text-center">
+                                            {t.week} {match.week} • {upcomingFormattedDate} • {match.gym}
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-gray-500 text-center">
-                                        {format(getMatchDateForWeek(match.week, match.timeSlot), "EEEE, MMM d")} • {match.gym}
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
-                            <div className="text-center py-8 text-gray-500">No upcoming matches</div>
+                            <div className="text-center py-8 text-gray-500">{t.noUpcomingMatches}</div>
                         )}
                     </div>
                 </div>

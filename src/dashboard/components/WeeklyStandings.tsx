@@ -24,9 +24,10 @@ interface WeeklyStandingsProps {
     teams: Team[];
     weekStats: WeekStats[];
     currentWeek: number;
+    t: any;
 }
 
-export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandingsProps) => {
+export const WeeklyStandings = ({ teams, weekStats, currentWeek, t }: WeeklyStandingsProps) => {
     const [selectedWeek, setSelectedWeek] = useState(currentWeek);
 
     // Get available weeks from the stats
@@ -39,8 +40,8 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
             const team = teams.find(t => t.id === stat.teamId);
             return {
                 ...stat,
-                teamName: team?.name || 'Unknown Team',
-                pool: team?.pool || 'N/A',
+                teamName: team?.name || t.unknownTeam,
+                pool: team?.pool || t.notAvailable,
                 players: team?.players || [],
                 seasonTotal: team?.totalPoints || 0
             };
@@ -67,12 +68,22 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
         const startDate = new Date(2025, 8, 22); // Month is 0-indexed
         const weekDate = new Date(startDate);
         weekDate.setDate(startDate.getDate() + (weekNumber - 1) * 7);
-        return weekDate.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+        
+        if (t.language === 'fr') {
+            return weekDate.toLocaleDateString('fr-CA', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        } else {
+            return weekDate.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
     };
 
     // If no weekly data, show only season standings
@@ -93,8 +104,8 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                             <FaTrophy className="text-white text-2xl" />
                         </div>
                         <div>
-                            <h3 className="text-3xl font-bold text-gray-800">Season Standings</h3>
-                            <p className="text-gray-600 mt-1">Overall performance</p>
+                            <h3 className="text-3xl font-bold text-gray-800">{t.seasonStandings}</h3>
+                            <p className="text-gray-600 mt-1">{t.overallPerformance}</p>
                         </div>
                     </div>
                 </div>
@@ -105,19 +116,21 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                         <div className="flex items-center">
                             <FaFire className="text-orange-500 text-xl mr-3" />
                             <div>
-                                <p className="text-sm text-gray-600">Leading Team</p>
-                                <p className="font-bold text-gray-800">{seasonData[0]?.name || 'No teams'}</p>
+                                <p className="text-sm text-gray-600">{t.leadingTeam}</p>
+                                <p className="font-bold text-gray-800">{seasonData[0]?.name || t.noTeams}</p>
                             </div>
                         </div>
-                        <div className="mt-2 text-2xl font-bold text-blue-600">{seasonData[0]?.totalPoints || 0} pts</div>
+                        <div className="mt-2 text-2xl font-bold text-blue-600">
+                            {seasonData[0]?.totalPoints || 0} {t.points}
+                        </div>
                     </div>
 
                     <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
                         <div className="flex items-center">
                             <FaChartLine className="text-green-500 text-xl mr-3" />
                             <div>
-                                <p className="text-sm text-gray-600">Total Teams</p>
-                                <p className="font-bold text-gray-800">Active</p>
+                                <p className="text-sm text-gray-600">{t.totalTeams}</p>
+                                <p className="font-bold text-gray-800">{t.active}</p>
                             </div>
                         </div>
                         <div className="mt-2 text-2xl font-bold text-green-600">{seasonData.length}</div>
@@ -127,22 +140,22 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                         <div className="flex items-center">
                             <FaUsers className="text-purple-500 text-xl mr-3" />
                             <div>
-                                <p className="text-sm text-gray-600">Total Points</p>
-                                <p className="font-bold text-gray-800">Season</p>
+                                <p className="text-sm text-gray-600">{t.totalPoints}</p>
+                                <p className="font-bold text-gray-800">{t.season}</p>
                             </div>
                         </div>
                         <div className="mt-2 text-2xl font-bold text-purple-600">
-                            {seasonData.reduce((sum, team) => sum + team.totalPoints, 0)} pts
+                            {seasonData.reduce((sum, team) => sum + team.totalPoints, 0)} {t.points}
                         </div>
                     </div>
                 </div>
 
                 {/* Season Table */}
-                <SeasonTable seasonData={seasonData} />
+                <SeasonTable seasonData={seasonData} t={t} />
 
                 {/* Footer */}
                 <div className="mt-6 text-center text-sm text-gray-500">
-                    <p>No weekly data available for week {selectedWeek} • Showing overall season standings</p>
+                    <p>{t.noWeeklyData} {selectedWeek} • {t.showingSeasonStandings}</p>
                 </div>
             </div>
         );
@@ -158,7 +171,7 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                         <FaTrophy className="text-white text-2xl" />
                     </div>
                     <div>
-                        <h3 className="text-3xl font-bold text-gray-800">Weekly Standings</h3>
+                        <h3 className="text-3xl font-bold text-gray-800">{t.weeklyStandings}</h3>
                         <p className="text-gray-600 mt-1">{getWeekDate(selectedWeek)}</p>
                     </div>
                 </div>
@@ -174,7 +187,7 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                     </button>
 
                     <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-gray-500">Week</span>
+                        <span className="text-sm font-medium text-gray-500">{t.week}</span>
                         <select
                             value={selectedWeek}
                             onChange={(e) => setSelectedWeek(Number(e.target.value))}
@@ -202,30 +215,34 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                     <div className="flex items-center">
                         <FaFire className="text-orange-500 text-xl mr-3" />
                         <div>
-                            <p className="text-sm text-gray-600">Top Team</p>
+                            <p className="text-sm text-gray-600">{t.topTeam}</p>
                             <p className="font-bold text-gray-800">{highestScoringTeam?.teamName}</p>
                         </div>
                     </div>
-                    <div className="mt-2 text-2xl font-bold text-blue-600">{highestScoringTeam?.points} pts</div>
+                    <div className="mt-2 text-2xl font-bold text-blue-600">
+                        {highestScoringTeam?.points} {t.points}
+                    </div>
                 </div>
 
                 <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
                     <div className="flex items-center">
                         <FaChartLine className="text-green-500 text-xl mr-3" />
                         <div>
-                            <p className="text-sm text-gray-600">Total Points</p>
-                            <p className="font-bold text-gray-800">Week {selectedWeek}</p>
+                            <p className="text-sm text-gray-600">{t.totalPoints}</p>
+                            <p className="font-bold text-gray-800">{t.week} {selectedWeek}</p>
                         </div>
                     </div>
-                    <div className="mt-2 text-2xl font-bold text-green-600">{totalWeekPoints} pts</div>
+                    <div className="mt-2 text-2xl font-bold text-green-600">
+                        {totalWeekPoints} {t.points}
+                    </div>
                 </div>
 
                 <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
                     <div className="flex items-center">
                         <FaUsers className="text-purple-500 text-xl mr-3" />
                         <div>
-                            <p className="text-sm text-gray-600">Teams Competing</p>
-                            <p className="font-bold text-gray-800">Active</p>
+                            <p className="text-sm text-gray-600">{t.teamsCompeting}</p>
+                            <p className="font-bold text-gray-800">{t.active}</p>
                         </div>
                     </div>
                     <div className="mt-2 text-2xl font-bold text-purple-600">{weeklyData.length}</div>
@@ -239,22 +256,22 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    Rank
+                                    {t.rank}
                                 </th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    Team
+                                    {t.team}
                                 </th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    1st Period
+                                    {t.firstPeriod}
                                 </th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    2nd Period
+                                    {t.secondPeriod}
                                 </th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    Week Total
+                                    {t.weekTotal}
                                 </th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                    Season Total
+                                    {t.seasonTotal}
                                 </th>
                             </tr>
                         </thead>
@@ -288,7 +305,7 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
                                             <div className="font-bold text-gray-900 text-lg">{team.teamName}</div>
                                             <div className="text-sm text-gray-500 mt-1">
                                                 {team.players.slice(0, 2).join(', ')}
-                                                {team.players.length > 2 && ` +${team.players.length - 2} more`}
+                                                {team.players.length > 2 && ` +${team.players.length - 2} ${t.more}`}
                                             </div>
                                         </div>
                                     </td>
@@ -321,21 +338,21 @@ export const WeeklyStandings = ({ teams, weekStats, currentWeek }: WeeklyStandin
 
             {/* Footer */}
             <div className="mt-6 text-center text-sm text-gray-500">
-                <p>Data updated automatically • {weeklyData.length} teams competing in Week {selectedWeek}</p>
+                <p>{t.dataUpdatedAutomatically} • {weeklyData.length} {t.teamsCompetingInWeek} {selectedWeek}</p>
             </div>
         </div>
     );
 };
 
-const SeasonTable = ({ seasonData }: { seasonData: Team[] }) => (
+const SeasonTable = ({ seasonData, t }: { seasonData: Team[], t: any }) => (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
         <div className="overflow-x-auto">
             <table className="w-full">
                 <thead>
                     <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Rank</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Team</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Points</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">{t.rank}</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">{t.team}</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">{t.totalPoints}</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -361,7 +378,7 @@ const SeasonTable = ({ seasonData }: { seasonData: Team[] }) => (
                                     <div className="font-bold text-gray-900">{team.name}</div>
                                     <div className="text-sm text-gray-500 mt-1">
                                         {team.players.slice(0, 2).join(', ')}
-                                        {team.players.length > 2 && ` +${team.players.length - 2} more`}
+                                        {team.players.length > 2 && ` +${team.players.length - 2} ${t.more}`}
                                     </div>
                                 </div>
                             </td>                           

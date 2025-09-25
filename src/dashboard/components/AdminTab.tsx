@@ -37,7 +37,7 @@ export const AdminTab = ({
     setTeams,
     teams,
     matches,
-    setMatches }: AdminTabProps) => {
+    setMatches}: AdminTabProps) => {
     const [loginSessions, setLoginSessions] = useState<LoginSession[]>([]);
     const [loading, setLoading] = useState(false);
 

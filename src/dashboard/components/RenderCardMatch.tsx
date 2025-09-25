@@ -33,6 +33,7 @@ export const RenderMatchCard = ({
     setMatches: any;
     teams: Team[];
     setTeams: any;
+    t:any
 }) => {
     // Helper function to determine pool badge class
     const getPoolBadgeClass = (pool: string) => {
