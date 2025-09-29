@@ -184,12 +184,21 @@ export const useDashboard = () => {
             { time: '21:30', hour: 21, minute: 30 },
         ];
 
-        const createMatchDate = (slot: { hour: number; minute: number }) => {
-            const matchDate = new Date();
-            matchDate.setDate(matchDate.getDate() + (week - 1) * 7);
-            matchDate.setHours(slot.hour, slot.minute, 0, 0);
-            return matchDate;
+        const createMatchDate = (slot: { hour: number; minute: number }, week: number) => {
+            // Fixed league start date: September 22, 2025
+            const leagueStartDate = new Date(2025, 8, 22); // Month is 0-indexed (8 = September)
+            leagueStartDate.setHours(0, 0, 0, 0);
+
+            // Calculate the target date: start date + (week - 1) * 7 days
+            const targetDate = new Date(leagueStartDate);
+            targetDate.setDate(leagueStartDate.getDate() + (week - 1) * 7);
+
+            // Now set the specific time
+            targetDate.setHours(slot.hour, slot.minute, 0, 0);
+
+            return targetDate;
         };
+
 
         const generateFirstPeriodPoolMatches = async (pool: Team[], gym: string, poolLabel: string) => {
             const combos = [
@@ -201,28 +210,10 @@ export const useDashboard = () => {
             for (let i = 0; i < combos.length; i++) {
                 const [a, b, r] = combos[i];
                 const slot = period1Slots[i];
-                const matchDate = createMatchDate(slot);
+                const matchDate = createMatchDate(slot, week);
 
                 const startTime = matchDate.getTime();
                 const endTime = startTime + 25 * 60 * 1000;
-
-
-
-                // await addDoc(collection(db, 'matches'), {
-                //     week,
-                //     pool: poolLabel,
-                //     teamA: pool[a].name,
-                //     teamB: pool[b].name,
-                //     referee: pool[r].name,
-                //     scoreA: 0,
-                //     scoreB: 0,
-                //     completed: false,
-                //     startTime,
-                //     endTime,
-                //     gym,
-                //     timeSlot: slot.time,
-                //     matchNumber: i + 1,
-                // });
 
                 await createMatch(week, {
                     pool: poolLabel,
@@ -340,11 +331,20 @@ export const useDashboard = () => {
                 { time: '23:20', hour: 23, minute: 20 },
             ];
 
-            const createMatchDate = (slot: { hour: number; minute: number }) => {
-                const matchDate = new Date();
-                matchDate.setDate(matchDate.getDate() + (week - 1) * 7);
-                matchDate.setHours(slot.hour, slot.minute, 0, 0);
-                return matchDate;
+
+            const createMatchDate = (slot: { hour: number; minute: number }, week: number) => {
+                // Fixed league start date: September 22, 2025
+                const leagueStartDate = new Date(2025, 8, 22); // Month is 0-indexed (8 = September)
+                leagueStartDate.setHours(0, 0, 0, 0);
+
+                // Calculate the target date: start date + (week - 1) * 7 days
+                const targetDate = new Date(leagueStartDate);
+                targetDate.setDate(leagueStartDate.getDate() + (week - 1) * 7);
+
+                // Now set the specific time
+                targetDate.setHours(slot.hour, slot.minute, 0, 0);
+
+                return targetDate;
             };
 
             // 8. Helper: generate matches according to specific position-based pairing
@@ -370,7 +370,10 @@ export const useDashboard = () => {
                 for (let i = 0; i < matchesConfig.length; i++) {
                     const config = matchesConfig[i];
                     const slot = slots[i];
-                    const matchDate = createMatchDate(slot);
+                    const matchDate = createMatchDate(slot, week);
+
+                    const startTime = matchDate.getTime();
+                    const endTime = startTime + 25 * 60 * 1000;
 
                     const teamA = poolTeams[config.teamAIndex];
                     const teamB = poolTeams[config.teamBIndex];
@@ -395,8 +398,8 @@ export const useDashboard = () => {
                         scoreA: 0,
                         scoreB: 0,
                         completed: false,
-                        startTime: matchDate.getTime(),
-                        endTime: matchDate.getTime() + 25 * 60 * 1000,
+                        startTime,
+                        endTime,
                         gym,
                         timeSlot: slot.time,
                         matchNumber: matchNumber,
@@ -457,8 +460,13 @@ export const useDashboard = () => {
 
         // Optional: Only allow editing if match has started
         // const gameHasStarted = Date.now() >= match.startTime;
+        console.log("user.name: ", user.name)
+        console.log("user.team: ", user.team)
+        console.log("match.referee: ", match.referee)
 
-        return user.role === 'referee' && isRefereeForMatch;
+        console.log("isRefereeForMatch: ", isRefereeForMatch)
+
+        return isRefereeForMatch;
     };
 
     // Change score to dropdown select

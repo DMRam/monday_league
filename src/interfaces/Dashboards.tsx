@@ -9,7 +9,6 @@ export interface Team {
     secondPeriodPoints?: number;
 }
 
-
 export interface Match {
     id: string;
     week: number;

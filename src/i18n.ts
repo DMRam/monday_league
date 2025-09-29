@@ -148,6 +148,25 @@ export const translations = {
       generatingMatches: "Generating matches...",
       matchesGeneratedSuccess: "Second period matches generated successfully",
       errorGeneratingMatches: "Error generating matches",
+
+      // Add the missing translations
+      completed: "Completed",
+      scheduled: "Scheduled",
+      referee: "Referee",
+      you: "You",
+      startsAt: "Starts at",
+      matchInProgress: "Match in progress",
+      startedAt: "Started at",
+      matchEnded: "Match ended",
+      matchCompleted: "Match completed",
+      matchScheduled: "Match scheduled",
+      scoreEditingAvailable:
+        "Score editing will be available when the match starts",
+      saveAnytime: "You can save results anytime after the match has started",
+      availableAt: "available at",
+      areYouSureSave: "Are you sure you want to save the scores?",
+      cancel: "Cancel",
+      yesSaveScores: "Yes, Save Scores",
     },
   },
   fr: {
@@ -298,6 +317,26 @@ export const translations = {
       generatingMatches: "Génération des matchs...",
       matchesGeneratedSuccess: "Matchs de deuxième période générés avec succès",
       errorGeneratingMatches: "Erreur lors de la génération des matchs",
+
+      // Add the missing translations
+      completed: "Terminé",
+      scheduled: "Programmé",
+      referee: "Arbitre",
+      you: "Vous",
+      startsAt: "Début à",
+      matchInProgress: "Match en cours",
+      startedAt: "Débuté à",
+      matchEnded: "Match terminé",
+      matchCompleted: "Match complété",
+      matchScheduled: "Match programmé",
+      scoreEditingAvailable:
+        "La modification des scores sera disponible lorsque le match débutera",
+      saveAnytime:
+        "Vous pouvez sauvegarder les résultats après le début du match",
+      availableAt: "disponible à",
+      areYouSureSave: "Êtes-vous sûr de vouloir sauvegarder les scores?",
+      cancel: "Annuler",
+      yesSaveScores: "Oui, sauvegarder",
     },
   },
 };

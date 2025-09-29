@@ -1,9 +1,15 @@
 import { FaSave } from "react-icons/fa";
-import CountdownTimer from "./CountDown";
 import { format } from "date-fns";
-import { useActiveTabs } from "../../hooks/useActiveTabs";
-import type { Match, Team } from "../../interfaces/Dashboards";
-import type { TeamUser } from "../../interfaces/User";
+import { useState, useEffect } from "react";
+import { enUS, fr } from "date-fns/locale";
+import { CountdownTimer } from "./CountDown";
+
+type Language = "en" | "fr";
+
+const localeMap = {
+    en: enUS,
+    fr: fr,
+};
 
 export const RenderMatchCard = ({
     match,
@@ -14,111 +20,187 @@ export const RenderMatchCard = ({
     matches,
     setMatches,
     teams,
-    setTeams
+    setTeams,
+    language = "en" as Language,
+    t
 }: {
-    match: Match;
+    match: any;
     user: any;
-    canEditScore: (match: Match, user: any) => boolean;
-    updateMatchScore: any
+    canEditScore: (match: any, user: any) => boolean;
+    updateMatchScore: any;
     saveMatchResults: (
-        teams: Team[],
+        teams: any[],
         setTeams: any,
         setMatches: any,
         matchId: string,
-        matches: Match[],
-        // canEditScoreCallback: () => boolean
-        user: TeamUser
+        matches: any[],
+        user: any
     ) => void;
-    matches: Match[];
+    matches: any[];
     setMatches: any;
-    teams: Team[];
+    teams: any[];
     setTeams: any;
-    t:any
+    language?: Language;
+    t: any
 }) => {
-    // Helper function to determine pool badge class
-    const getPoolBadgeClass = (pool: string) => {
-        if (pool === "Pool 1" || pool === "A") return 'bg-blue-100 text-blue-800';
-        if (pool === "Pool 2" || pool === "B") return 'bg-orange-100 text-orange-800';
-        if (pool === "Pool 1") return 'bg-purple-100 text-purple-800';
-        if (pool === "Pool 2") return 'bg-green-100 text-green-800';
-        return 'bg-gray-100 text-gray-800';
+    const [currentTime, setCurrentTime] = useState(Date.now());
+    const [showConfirmation, setShowConfirmation] = useState(false);
+
+    useEffect(() => {
+        const interval = setInterval(() => setCurrentTime(Date.now()), 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const matchHasStarted = currentTime >= match.startTime;
+    const matchEnded = currentTime > match.endTime;
+    const canEdit = !match.completed && canEditScore(match, user);
+    const shouldDisable = user.role !== "admin" && !matchHasStarted;
+
+
+
+    const dateFnsLocale = localeMap[language];
+
+    const formatTime = (ts: number) => format(new Date(ts), "HH:mm", { locale: dateFnsLocale });
+    const formatDate = (ts: number) => format(new Date(ts), "MMM d, HH:mm", { locale: dateFnsLocale });
+
+    const handleSaveClick = () => setShowConfirmation(true);
+    const confirmSave = () => {
+        saveMatchResults(teams ?? [], setTeams, setMatches, match.id, matches, user);
+        setShowConfirmation(false);
     };
-
-    const { getMatchDateForWeek } = useActiveTabs()
-
-    console.log('User RenderMatchCard: ', user)
-
+    const cancelSave = () => setShowConfirmation(false);
 
     return (
-        <div
-            key={match.id}
-            className={`bg-white border rounded-xl p-6 shadow-sm transition duration-200 hover:shadow-lg ${user.role === "referee" && user.name === match.referee ? "border-blue-500" : "border-gray-200"
-                }`}
-        >
+        <div className={`bg-white border rounded-xl p-6 shadow-sm transition duration-200 hover:shadow-lg ${user.team === match.referee ? "border-blue-500" : "border-gray-200"
+            }`}>
+            {/* Confirmation Dialog */}
+            {showConfirmation && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-sm mx-4">
+                        <h3 className="text-lg font-semibold mb-4">{t.saveResults}</h3>
+                        <p className="text-gray-600 mb-4">
+                            {t.areYouSureSave}
+                        </p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={cancelSave}
+                                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                            >
+                                {t.cancel}
+                            </button>
+                            <button
+                                onClick={confirmSave}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                            >
+                                {t.yesSaveScores}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Pool & Status */}
             <div className="flex justify-between items-center mb-4">
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPoolBadgeClass(match.pool)}`}>
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
                     {match.pool}
                 </span>
                 <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold ${match.completed ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
                         }`}
                 >
-                    {match.completed ? "Completed" : "Scheduled"}
+                    {match.completed ? t.completed : t.scheduled}
                 </span>
             </div>
 
-            {/* Gym and Referee info */}
-            <div className="text-sm text-gray-500 mb-4 space-y-1">
-                {match.gym} • {match.timeSlot} • {format(getMatchDateForWeek(match.week, match.timeSlot), "EEEE, MMM d")}
+            {/* Match Info */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-700">
+                        {matchHasStarted
+                            ? matchEnded
+                                ? `${t.matchEnded} ${formatTime(match.endTime)}`
+                                : `${t.matchInProgress} - ${t.startedAt} ${formatTime(match.startTime)}`
+                            : `${t.startsAt} ${formatTime(match.startTime)}`
+                        }
+                    </p>
+                    <div className="text-xs text-gray-500 mt-1">
+                        <p>{formatDate(match.startTime)} • {match.gym}</p>
+                        {!matchEnded && (
+                            <CountdownTimer
+                                startTime={match.startTime}
+                                endTime={match.endTime}
+                                compact
+                                renderTime={(msLeft: number) => {
+                                    const totalSeconds = Math.floor(msLeft / 1000);
+                                    const hours = Math.floor(totalSeconds / 3600);
+                                    const minutes = Math.floor((totalSeconds % 3600) / 60);
+                                    const seconds = totalSeconds % 60;
+
+                                    // Determine color
+                                    let colorClass = "text-blue-600 font-semibold"; // before start
+                                    if (currentTime >= match.startTime && currentTime <= match.endTime - 5 * 60 * 1000) {
+                                        colorClass = "text-green-700 font-semibold"; // in progress
+                                    }
+                                    if (msLeft <= 5 * 60 * 1000) {
+                                        colorClass = "text-red-600 font-bold"; // last 5 min
+                                    }
+
+                                    return (
+                                        <span className={colorClass}>
+                                            {hours > 0 ? `${hours}h ${minutes}m ${seconds}s` : `${minutes}m ${seconds}s`}
+                                        </span>
+                                    );
+                                }}
+                            />
+                        )}
+                    </div>
+                </div>
+            </div>
+
+
+            {/* Referee info */}
+            <div className="text-sm text-gray-500 mb-4">
                 <div className="flex items-center gap-2">
-                    Referee:
+                    {t.referee}:
                     <span
-                        className={`font-semibold ${user.role === "referee" && user.name === match.referee
-                            ? "text-blue-700"
-                            : "text-gray-700"
+                        className={`font-semibold ${user.team === match.referee ? "text-blue-700" : "text-gray-700"
                             }`}
                     >
                         {match.referee}
                     </span>
-                    {user.role === "referee" && user.name === match.referee && (
-                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">You</span>
+                    {user.team === match.referee && (
+                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            {t.you}
+                        </span>
                     )}
                 </div>
             </div>
 
             {/* Teams and Scores */}
             <div className="flex justify-between items-center mb-4">
-                {/* Team A */}
-                <div
-                    className={`text-center flex-1 rounded-lg p-2 transition ${user.name === match.teamA ? "bg-blue-50 border border-blue-200" : ""
-                        }`}
-                >
+                <div className={`text-center flex-1 rounded-lg p-2 ${user.name === match.teamA ? "bg-blue-50 border border-blue-200" : ""
+                    }`}>
                     <p className="font-semibold text-gray-800">{match.teamA}</p>
                     <p className="text-3xl font-bold text-blue-600">{match.scoreA}</p>
                 </div>
 
-                <span className="text-gray-400 mx-4 font-semibold text-lg">VS</span>
+                <span className="text-gray-400 mx-4 font-semibold text-lg">{t.vs}</span>
 
-                {/* Team B */}
-                <div
-                    className={`text-center flex-1 rounded-lg p-2 transition ${user.name === match.teamB ? "bg-red-50 border border-red-200" : ""
-                        }`}
-                >
+                <div className={`text-center flex-1 rounded-lg p-2 ${user.name === match.teamB ? "bg-red-50 border border-red-200" : ""
+                    }`}>
                     <p className="font-semibold text-gray-800">{match.teamB}</p>
                     <p className="text-3xl font-bold text-red-600">{match.scoreB}</p>
                 </div>
             </div>
 
-            {/* Score update */}
-            {!match.completed && canEditScore(match, user) && (
+            {/* Score Editor - Only show if user can edit */}
+            {canEdit && (
                 <div className="mt-4 space-y-4">
                     <div className="flex justify-between items-center gap-4">
-                        {/* Team A */}
                         <div className="flex items-center space-x-2 flex-1">
-                            <span className="font-semibold text-gray-700">{match.teamA}</span>
+                            <span className="font-semibold text-gray-700 text-sm">{match.teamA}</span>
                             <select
-                                className="border rounded-lg p-2 w-20 focus:ring-1 focus:ring-blue-400 focus:outline-none"
+                                className="border rounded-lg p-2 w-16 focus:ring-1 focus:ring-blue-400 focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                                 value={match.scoreA}
                                 onChange={(e) =>
                                     updateMatchScore(
@@ -130,10 +212,7 @@ export const RenderMatchCard = ({
                                         user
                                     )
                                 }
-                                disabled={
-                                    user.role !== 'admin' && (Date.now() < match.startTime || Date.now() > match.endTime)
-                                }
-
+                                disabled={shouldDisable}
                             >
                                 {Array.from({ length: 50 }).map((_, i) => (
                                     <option key={i} value={i}>{i}</option>
@@ -141,11 +220,10 @@ export const RenderMatchCard = ({
                             </select>
                         </div>
 
-                        {/* Team B */}
                         <div className="flex items-center space-x-2 flex-1">
-                            <span className="font-semibold text-gray-700">{match.teamB}</span>
+                            <span className="font-semibold text-gray-700 text-sm">{match.teamB}</span>
                             <select
-                                className="border rounded-lg p-2 w-20 focus:ring-1 focus:ring-red-400 focus:outline-none"
+                                className="border rounded-lg p-2 w-16 focus:ring-1 focus:ring-red-400 focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                                 value={match.scoreB}
                                 onChange={(e) =>
                                     updateMatchScore(
@@ -157,10 +235,7 @@ export const RenderMatchCard = ({
                                         user
                                     )
                                 }
-                                disabled={
-                                    user.role !== 'admin' && (Date.now() < match.startTime || Date.now() > match.endTime)
-                                }
-
+                                disabled={shouldDisable}
                             >
                                 {Array.from({ length: 50 }).map((_, i) => (
                                     <option key={i} value={i}>{i}</option>
@@ -169,45 +244,46 @@ export const RenderMatchCard = ({
                         </div>
                     </div>
 
-                    {/* Countdown timer */}
-                    <div className={`text-sm text-center mb-2 ${Date.now() < match.startTime ? "text-yellow-600" :
-                        Date.now() > match.endTime ? "text-red-600" :
-                            "text-green-600"
-                        }`}>
-                        {Date.now() < match.startTime ? (
-                            <>Match starts in: <CountdownTimer endTime={match.startTime} /></>
-                        ) : Date.now() > match.endTime ? (
-                            <>Match ended</>
-                        ) : (
-                            <>Time remaining: <CountdownTimer endTime={match.endTime} /></>
-                        )}
-                    </div>
-
-                    {/* Save button */}
+                    {/* Save Button */}
                     <button
                         type="button"
-                        onClick={() =>
-                            saveMatchResults(
-                                teams ?? [],
-                                setTeams,
-                                setMatches,
-                                match.id,
-                                matches,
-                                user
-                            )
-                        }
-                        className="w-full bg-blue-600 text-white py-2 rounded-lg flex items-center justify-center hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-                        disabled={
-                            user.role !== 'admin' && (Date.now() < match.startTime || Date.now() > match.endTime)
-                        }
-
+                        onClick={handleSaveClick}
+                        className={`w-full text-white py-2 rounded-lg flex items-center justify-center transition text-sm font-semibold 
+    ${!shouldDisable ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"}`}
+                        disabled={shouldDisable}
                     >
-                        <FaSave className="mr-2" /> Save Results
+                        <FaSave className="mr-2" />
+                        {t.saveResultsShort || t.saveResults}
                     </button>
+
+                    {/* Optional helper text for French */}
+                    {shouldDisable && (
+                        <p className="text-xs text-gray-500 text-center mt-1">
+                            {t.scoreEditingAvailable}
+                        </p>
+                    )}
+
+
+                    {/* Help text */}
+                    {!matchHasStarted && (
+                        <p className="text-xs text-gray-500 text-center">
+                            {t.scoreEditingAvailable}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* For completed matches or non-editable matches */}
+            {!canEdit && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-center text-sm text-gray-600">
+                        {match.completed
+                            ? `${t.matchCompleted} • ${formatTime(match.endTime)}`
+                            : `${t.matchScheduled} • ${t.startsAt} ${formatTime(match.startTime)}`
+                        }
+                    </div>
                 </div>
             )}
         </div>
-
     );
-
 };

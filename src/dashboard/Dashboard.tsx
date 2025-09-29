@@ -26,12 +26,26 @@ export const Dashboard = () => {
     const { language, setLanguage, t } = useLanguage();
     const navigate = useNavigate();
 
-    const [currentWeek, setCurrentWeek] = useState(1);
     const [teams, setTeams] = useState<Team[]>([]);
     const [matches, setMatches] = useState<Match[]>([]);
     const [activeTab, setActiveTab] = useState('matches');
     const [selectedTeam, setSelectedTeam] = useState<Team>();
     const [loading, setLoading] = useState(true);
+
+    // Simple week calculation based on fixed start date
+    const getCurrentWeek = (): number => {
+        const leagueStartDate = new Date(2025, 8, 22); // September 22, 2025 (month is 0-indexed)
+        const today = new Date();
+
+        // Calculate difference in milliseconds
+        const diffTime = today.getTime() - leagueStartDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const diffWeeks = Math.floor(diffDays / 7) + 1; // +1 because week 1 started on Sept 22
+
+        return Math.max(1, diffWeeks); // Ensure at least week 1
+    };
+
+    const [currentWeek, setCurrentWeek] = useState(getCurrentWeek());
 
     // Admin form state
     const [newTeamName, setNewTeamName] = useState('');
@@ -186,62 +200,83 @@ export const Dashboard = () => {
     return (
         <div className="min-h-screen bg-gray-100">
             <header className="bg-blue-800 text-white shadow-lg">
-                <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-                    <div className="flex items-center">
-                        <FaVolleyballBall className="text-2xl text-orange-400 mr-2" />
-                        <h1 className="text-2xl font-bold">{t.title}</h1>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                        <button
-                            onClick={toggleLanguage}
-                            className="flex items-center space-x-1 text-white hover:text-orange-300 transition-colors px-3 py-1 rounded-full border border-white/30 hover:border-orange-300 text-sm"
-                            aria-label={language === 'en' ? 'Switch to French' : 'Passer en anglais'}
-                        >
-                            <FaGlobe className="text-xs" />
-                            <span className="font-medium">{language === 'en' ? 'FR' : 'EN'}</span>
-                        </button>
-                        <span className="mr-4">{t.dashboard.welcome}, {user?.name}</span>
-                        <button
-                            onClick={handleLogout}
-                            className="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded-lg flex items-center transition"
-                        >
-                            <FaSignOutAlt className="mr-2" /> {t.dashboard.logout}
-                        </button>
-                    </div>
-                </div>
-                <div className="container mx-auto px-4 mt-4">
-                    <div className="flex overflow-x-auto space-x-2">
-                        <button
-                            onClick={() => setActiveTab('matches')}
-                            className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'matches' ? 'bg-white text-blue-800 font-semibold' : 'text-blue-200 hover:bg-blue-700'}`}
-                        >
-                            {t.dashboard.matches}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('dashboard')}
-                            className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'dashboard' ? 'bg-white text-blue-800 font-semibold' : 'text-blue-200 hover:bg-blue-700'}`}
-                        >
-                            {t.dashboard.dashboard}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('teams')}
-                            className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'players' ? 'bg-white text-blue-800 font-semibold' : 'text-blue-200 hover:bg-blue-700'}`}
-                        >
-                            {t.dashboard.teams}
-                        </button>
+                <div className="container mx-auto px-4 py-3">
+                    {/* Top row - logo and user actions */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="flex items-center">
+                            <FaVolleyballBall className="text-2xl text-orange-400 mr-2" />
+                            <h1 className="text-2xl font-bold">{t.title}</h1>
+                        </div>
 
-                        <button
-                            onClick={() => setActiveTab('admin')}
-                            className={`px-4 py-2 rounded-t-lg transition ${activeTab === 'admin'
-                                ? 'bg-white text-blue-800 font-semibold'
-                                : user?.role === 'admin'
-                                    ? 'text-blue-200 hover:bg-blue-700'
-                                    : 'text-gray-400 cursor-not-allowed'
-                                }`}
-                            disabled={user?.role !== 'admin'}
-                        >
-                            {t.dashboard.admin}
-                        </button>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={toggleLanguage}
+                                    className="flex items-center space-x-1 text-white hover:text-orange-300 transition-colors px-3 py-1 rounded-full border border-white/30 hover:border-orange-300 text-sm"
+                                    aria-label={language === 'en' ? 'Switch to French' : 'Passer en anglais'}
+                                >
+                                    <FaGlobe className="text-xs" />
+                                    <span className="font-medium">{language === 'en' ? 'FR' : 'EN'}</span>
+                                </button>
+                                <span className="text-sm sm:text-base whitespace-nowrap">
+                                    {t.dashboard.welcome}, {user?.name}
+                                </span>
+                            </div>
+
+                            <button
+                                onClick={handleLogout}
+                                className="bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded-lg flex items-center justify-center transition text-sm sm:text-base w-full sm:w-auto"
+                            >
+                                <FaSignOutAlt className="mr-2" />
+                                {t.dashboard.logout}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Tab navigation */}
+                    <div className="mt-4">
+                        <div className="flex overflow-x-auto space-x-2 pb-1">
+                            <button
+                                onClick={() => setActiveTab('matches')}
+                                className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'matches'
+                                        ? 'bg-white text-blue-800 font-semibold'
+                                        : 'text-blue-200 hover:bg-blue-700'
+                                    }`}
+                            >
+                                {t.dashboard.matches}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('dashboard')}
+                                className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'dashboard'
+                                        ? 'bg-white text-blue-800 font-semibold'
+                                        : 'text-blue-200 hover:bg-blue-700'
+                                    }`}
+                            >
+                                {t.dashboard.dashboard}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('teams')}
+                                className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'players'
+                                        ? 'bg-white text-blue-800 font-semibold'
+                                        : 'text-blue-200 hover:bg-blue-700'
+                                    }`}
+                            >
+                                {t.dashboard.teams}
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('admin')}
+                                className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'admin'
+                                        ? 'bg-white text-blue-800 font-semibold'
+                                        : user?.role === 'admin'
+                                            ? 'text-blue-200 hover:bg-blue-700'
+                                            : 'text-gray-400 cursor-not-allowed'
+                                    }`}
+                                disabled={user?.role !== 'admin'}
+                            >
+                                {t.dashboard.admin}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
