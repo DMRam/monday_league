@@ -10,7 +10,7 @@ export interface ActiveTabsProps {
     canEditScore: (match: Match, user: TeamUser) => boolean;
     user: TeamUser | null
     updateMatchScore: (matchId: string, newScoreA: number, newScoreB: number, matches: Match[], setMatches: (value: React.SetStateAction<Match[]>) => void) => void
-    saveMatchResults: any;
+    saveMatchResults: (teams: Team[], setMatches: (value: React.SetStateAction<Match[]>) => void, matchId: string, matches: Match[], user: TeamUser) => Promise<void>;
     matches: Match[];
     setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
     secondaryPool: Team[]

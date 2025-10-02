@@ -95,7 +95,7 @@ export const translations = {
       noMatchesScheduled: "No matches scheduled for week",
       firstPeriod: "First Period (8:50 PM - 9:50 PM)",
       firstPeriodDescription: "Round-robin matches within each pool",
-      secondPeriod: "Second Period (9:50 PM - 10:50 PM)",
+      secondPeriod: "Second Period (9:50 PM - 10:45 PM)",
       secondPeriodDescription:
         "Ranking matches: Pool 1 (1st-3rd) and Pool 2 (4th-6th)",
       generateSecondPeriodMatchesAdmin:
@@ -147,7 +147,8 @@ export const translations = {
       generateSecondPeriodMatches: "Generate Second Period Matches",
       generatingMatches: "Generating matches...",
       matchesGeneratedSuccess: "Second period matches generated successfully",
-      errorGeneratingMatches: "Error generating matches",
+      errorGeneratingMatches:
+        "Error generating matches - check first period matches completion",
 
       // Add the missing translations
       completed: "Completed",
@@ -264,7 +265,7 @@ export const translations = {
       noMatchesScheduled: "Aucun match programmé pour la semaine",
       firstPeriod: "Première période (20h50 - 21h50)",
       firstPeriodDescription: "Matchs aller-retour dans chaque Pool",
-      secondPeriod: "Deuxième période (21h50 - 22h50)",
+      secondPeriod: "Deuxième période (21h50 - 22h45)",
       secondPeriodDescription:
         "Matchs de classement : Pool 1 (1er-3e) et Pool 2 (4e-6e)",
       generateSecondPeriodMatchesAdmin:
@@ -316,9 +317,8 @@ export const translations = {
       generateSecondPeriodMatches: "Générer les matchs de deuxième période",
       generatingMatches: "Génération des matchs...",
       matchesGeneratedSuccess: "Matchs de deuxième période générés avec succès",
-      errorGeneratingMatches: "Erreur lors de la génération des matchs",
+      errorGeneratingMatches: "Erreur lors de la génération des matchs - vérifiez la complétion de la première période",
 
-      // Add the missing translations
       completed: "Terminé",
       scheduled: "Programmé",
       referee: "Arbitre",

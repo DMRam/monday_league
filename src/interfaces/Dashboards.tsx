@@ -2,19 +2,30 @@ export interface Team {
     id: string;
     name: string;
     totalPoints: number;
+    firstPeriodPoints?: number;
     pool: string;
     coach: string;
     players: string[];
     currentDayPoints: number;
     secondPeriodPoints?: number;
+    weeklyStats?: WeeklyTeamStats[];
+}
+
+export interface WeeklyTeamStats {
+    week: number;
+    firstPeriodPoints: number;
+    secondPeriodPoints: number;
+    totalPoints: number;
+    wins: number;
+    losses: number;
 }
 
 export interface Match {
     id: string;
     week: number;
     pool: string;
-    teamA: string;
-    teamB: string;
+    teamA: Team;
+    teamB: Team;
     scoreA: number;
     scoreB: number;
     completed: boolean;
@@ -24,6 +35,9 @@ export interface Match {
     gym: string;
     timeSlot: string;
     isSecondPeriod: boolean
+    savedAt?: number;
+    savedBy?: string;
+    createdAt: number;
 }
 
 export interface TeamWeekStats {

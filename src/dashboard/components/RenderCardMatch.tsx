@@ -3,6 +3,8 @@ import { format } from "date-fns";
 import { useState, useEffect } from "react";
 import { enUS, fr } from "date-fns/locale";
 import { CountdownTimer } from "./CountDown";
+import type { Match, Team } from "../../interfaces/Dashboards";
+import type { TeamUser } from "../../interfaces/User";
 
 type Language = "en" | "fr";
 
@@ -24,18 +26,11 @@ export const RenderMatchCard = ({
     language = "en" as Language,
     t
 }: {
-    match: any;
+    match: Match;
     user: any;
     canEditScore: (match: any, user: any) => boolean;
     updateMatchScore: any;
-    saveMatchResults: (
-        teams: any[],
-        setTeams: any,
-        setMatches: any,
-        matchId: string,
-        matches: any[],
-        user: any
-    ) => void;
+    saveMatchResults: ((teams: Team[], setMatches: (value: React.SetStateAction<Match[]>) => void, matchId: string, matches: Match[], user: TeamUser) => Promise<void>);
     matches: any[];
     setMatches: any;
     teams: any[];
@@ -43,6 +38,7 @@ export const RenderMatchCard = ({
     language?: Language;
     t: any
 }) => {
+
     const [currentTime, setCurrentTime] = useState(Date.now());
     const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -56,6 +52,13 @@ export const RenderMatchCard = ({
     const canEdit = !match.completed && canEditScore(match, user);
     const shouldDisable = user.role !== "admin" && !matchHasStarted;
 
+    useEffect(() => {
+        setCurrentTime(Date.now());
+    }, [showConfirmation])
+
+    console.log("Rendering match:", match.id, "Can edit:", canEdit, "Should disable:", shouldDisable);
+
+
 
 
     const dateFnsLocale = localeMap[language];
@@ -65,13 +68,17 @@ export const RenderMatchCard = ({
 
     const handleSaveClick = () => setShowConfirmation(true);
     const confirmSave = () => {
-        saveMatchResults(teams ?? [], setTeams, setMatches, match.id, matches, user);
+        saveMatchResults(teams ?? [], setMatches, match.id, matches, user);
         setShowConfirmation(false);
     };
     const cancelSave = () => setShowConfirmation(false);
 
     return (
-        <div className={`bg-white border rounded-xl p-6 shadow-sm transition duration-200 hover:shadow-lg ${user.team === match.referee ? "border-blue-500" : "border-gray-200"
+        <div className={`bg-white border rounded-xl p-6 shadow-sm transition duration-200 hover:shadow-lg ${match.completed
+            ? "border-gray-300 bg-gray-50 opacity-90"
+            : user.team === match.referee
+                ? "border-blue-500"
+                : "border-gray-200"
             }`}>
             {/* Confirmation Dialog */}
             {showConfirmation && (
@@ -118,42 +125,54 @@ export const RenderMatchCard = ({
                     <p className="text-sm font-semibold text-gray-700">
                         {matchHasStarted
                             ? matchEnded
-                                ? `${t.matchEnded} ${formatTime(match.endTime)}`
+                                ? `${t.matchEnded} ${formatTime(match.endTime - 5 * 60 * 1000)}`
                                 : `${t.matchInProgress} - ${t.startedAt} ${formatTime(match.startTime)}`
                             : `${t.startsAt} ${formatTime(match.startTime)}`
                         }
                     </p>
                     <div className="text-xs text-gray-500 mt-1">
                         <p>{formatDate(match.startTime)} • {match.gym}</p>
-                        {!matchEnded && (
+                        {(!matchEnded && !match.completed) && (
                             <CountdownTimer
                                 startTime={match.startTime}
                                 endTime={match.endTime}
                                 compact
                                 renderTime={(msLeft: number) => {
                                     const totalSeconds = Math.floor(msLeft / 1000);
-                                    const hours = Math.floor(totalSeconds / 3600);
+                                    const days = Math.floor(totalSeconds / (3600 * 24));
+                                    const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
                                     const minutes = Math.floor((totalSeconds % 3600) / 60);
                                     const seconds = totalSeconds % 60;
 
                                     // Determine color
-                                    let colorClass = "text-blue-600 font-semibold"; // before start
+                                    let colorClass = "text-blue-600 font-semibold";
                                     if (currentTime >= match.startTime && currentTime <= match.endTime - 5 * 60 * 1000) {
-                                        colorClass = "text-green-700 font-semibold"; // in progress
+                                        colorClass = "text-green-700 font-semibold";
                                     }
                                     if (msLeft <= 5 * 60 * 1000) {
-                                        colorClass = "text-red-600 font-bold"; // last 5 min
+                                        colorClass = "text-red-600 font-bold";
+                                    }
+
+                                    // Format time string with conditional days
+                                    let timeString;
+                                    if (days > 0) {
+                                        timeString = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+                                    } else if (hours > 0) {
+                                        timeString = `${hours}h ${minutes}m ${seconds}s`;
+                                    } else {
+                                        timeString = `${minutes}m ${seconds}s`;
                                     }
 
                                     return (
                                         <span className={colorClass}>
-                                            {hours > 0 ? `${hours}h ${minutes}m ${seconds}s` : `${minutes}m ${seconds}s`}
+                                            {timeString}
                                         </span>
                                     );
                                 }}
                             />
                         )}
                     </div>
+
                 </div>
             </div>
 
@@ -180,7 +199,7 @@ export const RenderMatchCard = ({
             <div className="flex justify-between items-center mb-4">
                 <div className={`text-center flex-1 rounded-lg p-2 ${user.name === match.teamA ? "bg-blue-50 border border-blue-200" : ""
                     }`}>
-                    <p className="font-semibold text-gray-800">{match.teamA}</p>
+                    <p className="font-semibold text-gray-800">{match.teamA.name}</p>
                     <p className="text-3xl font-bold text-blue-600">{match.scoreA}</p>
                 </div>
 
@@ -188,7 +207,7 @@ export const RenderMatchCard = ({
 
                 <div className={`text-center flex-1 rounded-lg p-2 ${user.name === match.teamB ? "bg-red-50 border border-red-200" : ""
                     }`}>
-                    <p className="font-semibold text-gray-800">{match.teamB}</p>
+                    <p className="font-semibold text-gray-800">{match.teamB.name}</p>
                     <p className="text-3xl font-bold text-red-600">{match.scoreB}</p>
                 </div>
             </div>
@@ -198,7 +217,7 @@ export const RenderMatchCard = ({
                 <div className="mt-4 space-y-4">
                     <div className="flex justify-between items-center gap-4">
                         <div className="flex items-center space-x-2 flex-1">
-                            <span className="font-semibold text-gray-700 text-sm">{match.teamA}</span>
+                            <span className="font-semibold text-gray-700 text-sm">{match.teamA.name}</span>
                             <select
                                 className="border rounded-lg p-2 w-16 focus:ring-1 focus:ring-blue-400 focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                                 value={match.scoreA}
@@ -221,7 +240,7 @@ export const RenderMatchCard = ({
                         </div>
 
                         <div className="flex items-center space-x-2 flex-1">
-                            <span className="font-semibold text-gray-700 text-sm">{match.teamB}</span>
+                            <span className="font-semibold text-gray-700 text-sm">{match.teamB.name}</span>
                             <select
                                 className="border rounded-lg p-2 w-16 focus:ring-1 focus:ring-red-400 focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                                 value={match.scoreB}
@@ -278,7 +297,7 @@ export const RenderMatchCard = ({
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="text-center text-sm text-gray-600">
                         {match.completed
-                            ? `${t.matchCompleted} • ${formatTime(match.endTime)}`
+                            ? `${t.matchCompleted} • ${formatTime(typeof match.savedAt === "number" ? match.savedAt : match.endTime - 5 * 60 * 1000)}`
                             : `${t.matchScheduled} • ${t.startsAt} ${formatTime(match.startTime)}`
                         }
                     </div>

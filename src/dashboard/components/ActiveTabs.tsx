@@ -1,4 +1,4 @@
-import { FaUserFriends, FaUsers } from "react-icons/fa";
+import { FaChartLine, FaUserFriends, FaUsers } from "react-icons/fa";
 import { useEffect, useRef, useState } from "react";
 import type { ActiveTabsProps } from "../../interfaces/ActiveTabs";
 import type { Match, Team, TeamWeekStats } from "../../interfaces/Dashboards";
@@ -37,7 +37,7 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
 
     const detailsRef = useRef<HTMLDivElement>(null);
 
-    const { calculateSecondHourPools, calculateSecondPeriodPools } = useActiveTabs();
+    const { calculateAllPools } = useActiveTabs();
     const { getMatchDateForWeek } = useActiveTabs();
 
     const [poolATeamsSecondPeriod, setPoolATeamsSecondPeriod] = useState<Team[]>([]);
@@ -77,42 +77,28 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
         const loadData = async () => {
             setIsLoading(true);
             try {
-                // First period pools (Pool A & Pool B)
-                const firstPeriodResult = await calculateSecondHourPools(
+
+                console.log("Loading pool data for week - useEffect:", currentWeek);
+                // Calculate ALL pools at once
+                const poolResults = await calculateAllPools(
                     teams ?? [],
                     matches,
                     currentWeek
                 );
 
-                // Save first-period pools
-                setPoolATeamsFirstPeriod(firstPeriodResult.poolATeams);
-                setPoolBTeamsFirstPeriod(firstPeriodResult.poolBTeams);
+                console.log("Pool calculation results:", poolResults);
 
-                // Second period pools (based on first-period ranking)
-                const allFirstPeriodTeams = [
-                    ...firstPeriodResult.poolATeams,
-                    ...firstPeriodResult.poolBTeams,
-                ];
+                // Set first period pools
+                setPoolATeamsFirstPeriod(poolResults.poolATeams);
+                setPoolBTeamsFirstPeriod(poolResults.poolBTeams);
 
-                const secondPeriodResult = calculateSecondPeriodPools(
-                    allFirstPeriodTeams,
-                    matches,
-                    currentWeek
-                );
-
-                // Save second-period pools
-                setPoolATeamsSecondPeriod(secondPeriodResult.premierPool);
-                setPoolBTeamsSecondPeriod(secondPeriodResult.secondaryPool);
-
-                // Update all teams with second-period points
-                if (setTeams && !isFirstPeriodMatch) {
-                    setTeams(secondPeriodResult.updatedTeams);
-                } else {
-                    console.warn("setTeams function is undefined");
-                }
+                // Set second period pools  
+                setPoolATeamsSecondPeriod(poolResults.premierPool);
+                setPoolBTeamsSecondPeriod(poolResults.secondaryPool);
 
             } catch (error) {
                 console.error("Error loading pool data:", error);
+                // Reset all pools on error
                 setPoolATeamsFirstPeriod([]);
                 setPoolBTeamsFirstPeriod([]);
                 setPoolATeamsSecondPeriod([]);
@@ -132,6 +118,9 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
     const isSecondPeriodMatch = (match: Match) => {
         return match.timeSlot > '21:30';
     };
+
+    console.log('Is first period match function:', isFirstPeriodMatch);
+    console.log('Is second period match function:', isSecondPeriodMatch);
 
     // Load week stats
     useEffect(() => {
@@ -226,6 +215,13 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                                 const isSelected = selectedTeam?.id === team.id;
                                 const totalPlayers = team.players.length;
 
+                                // Calculate total points from weeklyStats
+                                const totalPoints = team.weeklyStats?.reduce((total, stats) => total + stats.totalPoints, 0) || 0;
+
+                                // Get current week stats if available
+                                const currentWeekStats = team.weeklyStats?.find(stats => stats.week === currentWeek);
+                                const currentWeekPoints = currentWeekStats?.totalPoints || 0;
+
                                 return (
                                     <div
                                         key={team.id}
@@ -249,22 +245,51 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                                                         <h3 className="font-bold text-gray-900 text-lg">
                                                             {team.name}
                                                         </h3>
-                                                        <p className="text-gray-500 text-sm">
-                                                            {team.coach}
-                                                        </p>
+
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {/* Stats */}
-                                            <div className="grid grid-cols-1 gap-4 mb-4">
+                                            <div className="grid grid-cols-2 gap-3 mb-4">
                                                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                                                     <p className="text-2xl font-bold text-green-600">
-                                                        {team.totalPoints}
+                                                        {totalPoints}
                                                     </p>
                                                     <p className="text-xs text-gray-600">{t.seasonPoints}</p>
                                                 </div>
+                                                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                                                    <p className="text-xl font-bold text-blue-600">
+                                                        {currentWeekPoints}
+                                                    </p>
+                                                    <p className="text-xs text-gray-600">{t.week}</p>
+                                                </div>
                                             </div>
+
+                                            {/* Additional Stats in Expanded View */}
+                                            {isSelected && team.weeklyStats && team.weeklyStats.length > 0 && (
+                                                <div className="mb-4 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
+                                                    <h5 className="font-semibold text-gray-700 text-sm mb-2">{t.weeklyBreakdown}</h5>
+                                                    <div className="space-y-2">
+                                                        {team.weeklyStats.slice().reverse().map((stats, _index) => (
+                                                            <div key={stats.week} className="flex justify-between items-center text-xs">
+                                                                <span className="text-gray-600">{t.week} {stats.week}:</span>
+                                                                <div className="flex gap-2">
+                                                                    <span className={`px-2 py-1 rounded ${stats.wins > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                                        {stats.wins}W
+                                                                    </span>
+                                                                    <span className={`px-2 py-1 rounded ${stats.losses > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                                        {stats.losses}L
+                                                                    </span>
+                                                                    <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                                                        {stats.totalPoints}P
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Players Info */}
                                             <div className="flex items-center justify-between">
@@ -319,6 +344,34 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                                                         </div>
                                                     ))}
                                                 </div>
+
+                                                {/* Weekly Stats Summary */}
+                                                {team.weeklyStats && team.weeklyStats.length > 0 && (
+                                                    <div className="mt-6">
+                                                        <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                            <FaChartLine className="text-green-500" />
+                                                            {t.seasonPerformance}
+                                                        </h4>
+                                                        <div className="grid grid-cols-3 gap-2 text-center">
+                                                            <div className="bg-white p-3 rounded-lg border border-gray-200">
+                                                                <p className="text-2xl font-bold text-green-600">{totalPoints}</p>
+                                                                <p className="text-xs text-gray-600">{t.totalPoints}</p>
+                                                            </div>
+                                                            <div className="bg-white p-3 rounded-lg border border-gray-200">
+                                                                <p className="text-xl font-bold text-blue-600">
+                                                                    {team.weeklyStats.reduce((total, stats) => total + stats.wins, 0)}
+                                                                </p>
+                                                                <p className="text-xs text-gray-600">{t.wins}</p>
+                                                            </div>
+                                                            <div className="bg-white p-3 rounded-lg border border-gray-200">
+                                                                <p className="text-xl font-bold text-red-600">
+                                                                    {team.weeklyStats.reduce((total, stats) => total + stats.losses, 0)}
+                                                                </p>
+                                                                <p className="text-xs text-gray-600">{t.losses}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -345,7 +398,6 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                     </div>
                 </div>
             );
-
         case 'matches':
             const matchDate = getMatchDateForWeek(currentWeek, '20:50');
             const formattedDate = format(matchDate, "EEEE, MMM d", { locale: dateLocale });

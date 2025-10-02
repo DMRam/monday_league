@@ -23,16 +23,39 @@ export const useActiveTabs = () => {
             week: number,
             sortByScore: boolean = false
         ): Promise<Team[]> => {
+
+            console.log("Matches input to getTeamsFromMatches:", matches);
+            console.log("All teams input to getTeamsFromMatches:", allTeams);
+            console.log("Pool name:", poolName, "Week:", week);
+
             const poolMatches = matches.filter(
                 (m) => m.pool === poolName && m.week === week
             );
 
-            const teamNames = poolMatches.flatMap((m) => [m.teamA, m.teamB]);
-            const uniqueTeamNames = Array.from(new Set(teamNames));
 
-            const teamsList = uniqueTeamNames
-                .map((name) => allTeams.find((t) => t.name === name))
-                .filter(Boolean) as Team[];
+
+
+
+            console.log(`All team names in ${poolName} for week ${week}:`, allTeams);
+
+            allTeams.map(t => console.log(`Team: ${t.name}`));
+            poolMatches.map(m => console.log(`Match: ${m.teamA} vs ${m.teamB}`));
+            poolMatches.map(m => console.log(`Are teams in match? ${allTeams.map(t => t.name).includes(m.teamA.name)} vs ${allTeams.map(t => t.name).includes(m.teamB.name)}`));
+
+            const teamsList = allTeams.filter(t =>
+                poolMatches.some(
+                    m => (m.teamA.id === t.id || m.teamB.id === t.id) && m.isSecondPeriod === false
+                )
+            );
+
+
+            poolMatches.filter(m =>
+                !allTeams.some(t => t.id === m.teamA.id || t.name === m.teamB.id)
+            ).forEach(m => console.warn(`Warning: Match with unknown teams in ${poolName}: ${m.teamA} vs ${m.teamB}`));
+
+            console.log(`--- Matches for ${poolName} in week ${week}:`, poolMatches);
+
+            console.log(`Teams in ${poolName} for week ${week}:`, teamsList);
 
             try {
                 const statsQuery = query(
@@ -50,15 +73,18 @@ export const useActiveTabs = () => {
                 const enrichedTeams = teamsList.map((t) => {
                     // Sum points only from first-period matches
                     const teamMatches = poolMatches.filter(
-                        (m) => m.teamA === t.name || m.teamB === t.name
+                        (m) => (m.teamA.id === t.id || m.teamB.id === t.id) && !m.isSecondPeriod
                     );
+
 
                     const firstPeriodPoints = teamMatches.reduce((sum, match) => {
                         if (!match.completed) return sum;
-                        if (match.teamA === t.name) return sum + match.scoreA;
-                        if (match.teamB === t.name) return sum + match.scoreB;
+                        if (match.teamA.id === t.id) return sum + match.scoreA;
+                        if (match.teamB.id === t.id) return sum + match.scoreB;
                         return sum;
                     }, 0);
+
+                    console.log(`First period points for team ${t.name} in ${poolName}:`, firstPeriodPoints);
 
                     return {
                         ...t,
@@ -67,11 +93,17 @@ export const useActiveTabs = () => {
                 });
 
 
+
+                console.log(`Enriched teams for ${poolName}:`, enrichedTeams);
+
+
                 if (sortByScore) {
                     return enrichedTeams.sort(
                         (a, b) => b.currentDayPoints - a.currentDayPoints
                     );
                 }
+
+
                 return enrichedTeams;
             } catch (error) {
                 console.error("Error fetching team stats:", error);
@@ -85,48 +117,65 @@ export const useActiveTabs = () => {
         return { getTeamsFromMatches };
     };
 
-    const calculateSecondHourPools = async (
+    const calculateAllPools = async (
         teams: Team[],
         matches: Match[],
         week: number
     ) => {
         const { getTeamsFromMatches } = useTeamsFromMatches();
+
+        console.log("Matches received for pool calculation:", matches);
+        console.log("Teams received for pool calculation:", teams);
+        console.log("Calculating pools for week:", week);
         try {
+            // Get ACTUAL first period pools from matches
             const poolATeams = await getTeamsFromMatches(
                 matches,
                 "Pool 1",
                 teams,
                 week,
-                true  // This sorts by points already
+                true
+
             );
             const poolBTeams = await getTeamsFromMatches(
                 matches,
                 "Pool 2",
                 teams,
                 week,
-                true  // This sorts by points already
+                true
             );
 
-            // Combine all teams and sort by points to get overall ranking
+            console.log("First Period - Pool 1:", poolATeams.map(t => t.name));
+            console.log("First Period - Pool 2:", poolBTeams.map(t => t.name));
+
+            // Combine all teams and sort by points to get overall ranking for SECOND PERIOD
             const allTeamsSorted = [...poolATeams, ...poolBTeams].sort(
                 (a, b) => b.currentDayPoints - a.currentDayPoints
             );
 
-            // Pool 1: Top 3 teams overall (1st, 2nd, 3rd place)
-            const premierPool = allTeamsSorted.slice(0, 3);
+            console.log("All teams sorted by points:", allTeamsSorted.map(t => `${t.name}: ${t.currentDayPoints}`));
 
-            // Pool 2: Next 3 teams overall (4th, 5th, 6th place)
-            const secondaryPool = allTeamsSorted.slice(3, 6);
+            // Second Period Pools:
+            const premierPool = allTeamsSorted.slice(0, 3);  // Positions 1-3
+            const secondaryPool = allTeamsSorted.slice(3, 6); // Positions 4-6
+
+            console.log("Second Period - Premier Pool:", premierPool.map(t => t.name));
+            console.log("Second Period - Secondary Pool:", secondaryPool.map(t => t.name));
 
             return {
-                premierPool,
-                secondaryPool,
-                poolATeams,
-                poolBTeams
+                poolATeams,      // First Period Pool A
+                poolBTeams,      // First Period Pool B  
+                premierPool,     // Second Period Premier Pool
+                secondaryPool    // Second Period Secondary Pool
             };
         } catch (error) {
-            console.error("Error calculating second hour pools:", error);
-            return { premierPool: [], secondaryPool: [], poolATeams: [], poolBTeams: [] };
+            console.error("Error calculating pools:", error);
+            return {
+                poolATeams: [],
+                poolBTeams: [],
+                premierPool: [],
+                secondaryPool: []
+            };
         }
     };
 
@@ -140,17 +189,19 @@ export const useActiveTabs = () => {
             const secondPeriodMatches = matches.filter(
                 (match) =>
                     match.week === currentWeek &&
+                    match.timeSlot &&
                     ["21:50", "22:10", "22:30"].includes(match.timeSlot)
             );
+
 
             // Map second period points
             const secondPeriodPoints: Record<string, number> = {};
             secondPeriodMatches.forEach((match) => {
                 if (match.completed) {
-                    secondPeriodPoints[match.teamA] =
-                        (secondPeriodPoints[match.teamA] || 0) + match.scoreA;
-                    secondPeriodPoints[match.teamB] =
-                        (secondPeriodPoints[match.teamB] || 0) + match.scoreB;
+                    secondPeriodPoints[match.teamA.id] =
+                        (secondPeriodPoints[match.teamA.id] || 0) + match.scoreA;
+                    secondPeriodPoints[match.teamB.id] =
+                        (secondPeriodPoints[match.teamB.id] || 0) + match.scoreB;
                 }
             });
 
@@ -191,5 +242,5 @@ export const useActiveTabs = () => {
     };
 
 
-    return { getMatchDateForWeek, calculateSecondHourPools, calculateSecondPeriodPools }
+    return { getMatchDateForWeek, calculateAllPools, calculateSecondPeriodPools }
 }

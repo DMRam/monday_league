@@ -31,7 +31,6 @@ export const DefaultCase = ({
     poolBTeamsSecondPeriod,
     prevWeek,
     teams,
-    weekStats,
     t
 }: Props) => {
     const { getMatchDateForWeek } = useActiveTabs();
@@ -83,7 +82,10 @@ export const DefaultCase = ({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* First Hour Pools */}
                     <div className="space-y-6">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t.firstPeriod}</h3>
+                        <div className="flex items-center">
+                            <FaCalendarAlt className="text-blue-500 text-xl mr-2" />
+                            <h3 className="text-lg font-semibold text-gray-800">{t.firstPeriod}</h3>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <PoolDisplay
                                 title={t.poolA}
@@ -91,6 +93,8 @@ export const DefaultCase = ({
                                 colorClass="bg-blue-50"
                                 pointsBgClass="bg-blue-100 text-blue-800"
                                 t={t}
+                                week={currentWeek}
+                                period={1}
                             />
                             <PoolDisplay
                                 title={t.poolB}
@@ -98,6 +102,8 @@ export const DefaultCase = ({
                                 colorClass="bg-orange-50"
                                 pointsBgClass="bg-orange-100 text-orange-800"
                                 t={t}
+                                week={currentWeek}
+                                period={1}
                             />
                         </div>
                     </div>
@@ -112,28 +118,22 @@ export const DefaultCase = ({
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <PoolDisplay
-                                title={t.premierPool}
-                                teams={poolATeamsSecondPeriod
-                                    .map(team => ({
-                                        ...team,
-                                        currentDayPoints: team.secondPeriodPoints || 0
-                                    }))
-                                    .sort((a, b) => b.currentDayPoints - a.currentDayPoints)}
+                                title={t.poolA}
+                                teams={poolATeamsSecondPeriod}
                                 colorClass="bg-purple-50"
                                 pointsBgClass="bg-purple-100 text-purple-800"
                                 t={t}
+                                week={currentWeek}
+                                period={2}
                             />
                             <PoolDisplay
-                                title={t.secondaryPool}
-                                teams={poolBTeamsSecondPeriod
-                                    .map(team => ({
-                                        ...team,
-                                        currentDayPoints: team.secondPeriodPoints || 0
-                                    }))
-                                    .sort((a, b) => b.currentDayPoints - a.currentDayPoints)}
+                                title={t.poolB}
+                                teams={poolBTeamsSecondPeriod}
                                 colorClass="bg-green-50"
                                 pointsBgClass="bg-green-100 text-green-800"
                                 t={t}
+                                week={currentWeek}
+                                period={2}
                             />
                         </div>
                     </div>
@@ -144,84 +144,76 @@ export const DefaultCase = ({
             <WeeklyStandings
                 currentWeek={currentWeek}
                 teams={teams || []}
-                weekStats={weekStats}
                 t={t}
             />
 
-            {/* Recent Matches + Upcoming Matches */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Recent & Upcoming Matches */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Recent Matches */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center">
-                            <FaChartLine className="text-blue-500 text-xl mr-2" />
-                            <h3 className="text-xl font-bold text-gray-800">{t.recentMatches}</h3>
-                        </div>
-                        <span className="text-sm text-gray-500">
-                            {recentMatches.length} {t.shown}
-                        </span>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                    <div className="flex items-center mb-4">
+                        <FaChartLine className="text-green-500 text-lg mr-3" />
+                        <h3 className="text-lg font-bold text-gray-800">{t.recentMatches}</h3>
                     </div>
 
                     <div className="space-y-3">
                         {recentMatches.length > 0 ? (
                             recentMatches.map(match => (
-                                <div key={match.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
-                                            {match.teamA}
+                                <div key={match.id} className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-medium text-gray-800 text-sm flex-1 text-center">
+                                            {match.teamA.name}
                                         </span>
-                                        <span className="mx-4 text-lg font-bold text-gray-900 min-w-[60px] text-center">
+                                        <span className="mx-3 font-bold text-gray-900 text-base">
                                             {match.scoreA} - {match.scoreB}
                                         </span>
-                                        <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
-                                            {match.teamB}
+                                        <span className="font-medium text-gray-800 text-sm flex-1 text-center">
+                                            {match.teamB.name}
                                         </span>
                                     </div>
-                                    <div className="text-xs text-gray-500 text-center">
-                                        {t.week} {match.week} • {match.pool} • {match.gym}
+                                    <div className="text-xs text-gray-500 text-center mt-1">
+                                        {t.week} {match.week}
                                     </div>
                                 </div>
                             ))
                         ) : (
-                            <div className="text-center py-8 text-gray-500">{t.noCompletedMatches}</div>
+                            <div className="text-center py-6 text-gray-400 text-sm">{t.noCompletedMatches}</div>
                         )}
                     </div>
                 </div>
 
                 {/* Upcoming Matches */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <div className="flex items-center mb-6">
-                        <FaCalendarAlt className="text-blue-500 text-xl mr-2" />
-                        <h3 className="text-xl font-bold text-gray-800">{t.upcomingMatches}</h3>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                    <div className="flex items-center mb-4">
+                        <FaCalendarAlt className="text-blue-500 text-lg mr-3" />
+                        <h3 className="text-lg font-bold text-gray-800">{t.upcomingMatches}</h3>
                     </div>
+
                     <div className="space-y-3">
                         {upcomingMatches.length > 0 ? (
                             upcomingMatches.map(match => {
                                 const upcomingMatchDate = getMatchDateForWeek(match.week, match.timeSlot);
-                                const upcomingFormattedDate = format(upcomingMatchDate, "EEEE, MMM d", { locale: dateLocale });
-                                
+                                const upcomingFormattedDate = format(upcomingMatchDate, "MMM d", { locale: dateLocale });
+
                                 return (
-                                    <div key={match.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
-                                                {match.teamA}
+                                    <div key={match.id} className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-medium text-gray-800 text-sm flex-1 text-center">
+                                                {match.teamA.name}
                                             </span>
-                                            <span className="mx-4 text-gray-500 text-sm min-w-[60px] text-center">
-                                                {t.vs}
-                                            </span>
-                                            <span className="font-semibold text-gray-800 text-sm truncate flex-1 text-center">
-                                                {match.teamB}
+                                            <span className="mx-3 text-gray-400 text-sm font-medium">vs</span>
+                                            <span className="font-medium text-gray-800 text-sm flex-1 text-center">
+                                                {match.teamB.name}
                                             </span>
                                         </div>
-
-                                        <div className="text-xs text-gray-500 text-center">
-                                            {t.week} {match.week} • {upcomingFormattedDate} • {match.gym}
+                                        <div className="text-xs text-gray-500 text-center mt-1">
+                                            {t.week} {match.week} • {upcomingFormattedDate}
                                         </div>
                                     </div>
                                 );
                             })
                         ) : (
-                            <div className="text-center py-8 text-gray-500">{t.noUpcomingMatches}</div>
+                            <div className="text-center py-6 text-gray-400 text-sm">{t.noUpcomingMatches}</div>
                         )}
                     </div>
                 </div>

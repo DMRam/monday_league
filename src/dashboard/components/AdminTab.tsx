@@ -3,6 +3,7 @@ import type { AdminTabProps } from '../../interfaces/AdminTab';
 import { db } from "../../services/firebase"; // adjust path
 import { collection, getDocs } from 'firebase/firestore';
 import { useMemo } from "react";
+import { UpdateMatchManually } from './UpdateMatchManually';
 
 interface LoginSession {
     id: string;
@@ -33,11 +34,11 @@ export const AdminTab = ({
     setShowMatchCreation,
     setWeeksToGenerate,
     showMatchCreation,
-    weeksToGenerate,
+    weeksToGenerate = 1,
     setTeams,
     teams,
     matches,
-    setMatches}: AdminTabProps) => {
+    setMatches }: AdminTabProps) => {
     const [loginSessions, setLoginSessions] = useState<LoginSession[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -198,13 +199,25 @@ export const AdminTab = ({
                                 min="1"
                                 max="12"
                                 value={weeksToGenerate}
-                                onChange={e => setWeeksToGenerate(parseInt(e.target.value))}
+                                onChange={e => {
+                                    const value = parseInt(e.target.value);
+                                    if (!isNaN(value) && value >= 1 && value <= 12) {
+                                        setWeeksToGenerate(value);
+                                    } else {
+                                        setWeeksToGenerate(1);
+                                    }
+                                }}
                                 className="border p-2 rounded-lg w-20"
+                                required
                             />
                         </div>
 
                         <button
-                            onClick={() => generateMatches(teams ? teams : [], matches, weeksToGenerate, setShowMatchCreation, setMatches)}
+                            onClick={() => {
+                                if (weeksToGenerate >= 1 && weeksToGenerate <= 12) {
+                                    generateMatches(teams ? teams : [], matches, weeksToGenerate, setShowMatchCreation, setMatches);
+                                }
+                            }}
                             className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
                         >
                             Generate Matches
@@ -286,6 +299,8 @@ export const AdminTab = ({
                 )}
 
             </div>
+
+            <UpdateMatchManually teams={teams || []} />
 
         </div>
     )

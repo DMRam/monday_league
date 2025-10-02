@@ -56,7 +56,7 @@ export const Dashboard = () => {
 
     // Match creation state
     const [showMatchCreation, setShowMatchCreation] = useState(false);
-    const [weeksToGenerate, setWeeksToGenerate] = useState(6);
+    const [weeksToGenerate, setWeeksToGenerate] = useState(1);
 
     useEffect(() => {
         const fetchTeams = async () => {
@@ -81,7 +81,8 @@ export const Dashboard = () => {
                             coach: data.coach,
                             players: data.players || [],
                             currentDayPoints: data.currentDayPoints || 0,
-                            secondPeriodPoints: data.secondPeriodPoints || 0
+                            secondPeriodPoints: data.secondPeriodPoints || 0,
+                            weeklyStats: data.weeklyStats || []
                         } as Team;
                     });
 
@@ -91,6 +92,8 @@ export const Dashboard = () => {
                 console.error('Error fetching teams:', error);
             }
         };
+
+        console.log("Teams after fetching:", teams);
 
         const fetchMatches = async () => {
             try {
@@ -102,6 +105,7 @@ export const Dashboard = () => {
                     } as Match))
 
                 setMatches(sortMatches(fetchedMatches));
+                console.log("Fetched matches:", fetchedMatches.length, fetchedMatches);
             } catch (error) {
                 console.error('Error fetching matches:', error);
             }
@@ -114,7 +118,9 @@ export const Dashboard = () => {
         };
 
         fetchData();
-    }, []);
+    }, [currentWeek]);
+
+    console.log("Matches after sorting:", matches);
 
     const handleLogout = () => {
         logout();
@@ -239,8 +245,8 @@ export const Dashboard = () => {
                             <button
                                 onClick={() => setActiveTab('matches')}
                                 className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'matches'
-                                        ? 'bg-white text-blue-800 font-semibold'
-                                        : 'text-blue-200 hover:bg-blue-700'
+                                    ? 'bg-white text-blue-800 font-semibold'
+                                    : 'text-blue-200 hover:bg-blue-700'
                                     }`}
                             >
                                 {t.dashboard.matches}
@@ -248,8 +254,8 @@ export const Dashboard = () => {
                             <button
                                 onClick={() => setActiveTab('dashboard')}
                                 className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'dashboard'
-                                        ? 'bg-white text-blue-800 font-semibold'
-                                        : 'text-blue-200 hover:bg-blue-700'
+                                    ? 'bg-white text-blue-800 font-semibold'
+                                    : 'text-blue-200 hover:bg-blue-700'
                                     }`}
                             >
                                 {t.dashboard.dashboard}
@@ -257,8 +263,8 @@ export const Dashboard = () => {
                             <button
                                 onClick={() => setActiveTab('teams')}
                                 className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'players'
-                                        ? 'bg-white text-blue-800 font-semibold'
-                                        : 'text-blue-200 hover:bg-blue-700'
+                                    ? 'bg-white text-blue-800 font-semibold'
+                                    : 'text-blue-200 hover:bg-blue-700'
                                     }`}
                             >
                                 {t.dashboard.teams}
@@ -267,10 +273,10 @@ export const Dashboard = () => {
                             <button
                                 onClick={() => setActiveTab('admin')}
                                 className={`px-4 py-2 rounded-t-lg transition whitespace-nowrap ${activeTab === 'admin'
-                                        ? 'bg-white text-blue-800 font-semibold'
-                                        : user?.role === 'admin'
-                                            ? 'text-blue-200 hover:bg-blue-700'
-                                            : 'text-gray-400 cursor-not-allowed'
+                                    ? 'bg-white text-blue-800 font-semibold'
+                                    : user?.role === 'admin'
+                                        ? 'text-blue-200 hover:bg-blue-700'
+                                        : 'text-gray-400 cursor-not-allowed'
                                     }`}
                                 disabled={user?.role !== 'admin'}
                             >
