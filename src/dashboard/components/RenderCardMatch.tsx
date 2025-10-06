@@ -2,7 +2,6 @@ import { FaSave } from "react-icons/fa";
 import { format } from "date-fns";
 import { useState, useEffect } from "react";
 import { enUS, fr } from "date-fns/locale";
-import { CountdownTimer } from "./CountDown";
 import type { Match, Team } from "../../interfaces/Dashboards";
 import type { TeamUser } from "../../interfaces/User";
 
@@ -22,7 +21,6 @@ export const RenderMatchCard = ({
     matches,
     setMatches,
     teams,
-    setTeams,
     language = "en" as Language,
     t
 }: {
@@ -132,45 +130,71 @@ export const RenderMatchCard = ({
                     </p>
                     <div className="text-xs text-gray-500 mt-1">
                         <p>{formatDate(match.startTime)} • {match.gym}</p>
-                        {(!matchEnded && !match.completed) && (
-                            <CountdownTimer
-                                startTime={match.startTime}
-                                endTime={match.endTime}
-                                compact
-                                renderTime={(msLeft: number) => {
-                                    const totalSeconds = Math.floor(msLeft / 1000);
-                                    const days = Math.floor(totalSeconds / (3600 * 24));
-                                    const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-                                    const minutes = Math.floor((totalSeconds % 3600) / 60);
-                                    const seconds = totalSeconds % 60;
+                        {/* {(!matchEnded && !match.completed) && (
+                            <div className="text-xs text-gray-500 mt-1">
+                                <p>{formatDate(match.startTime)} • {match.gym}</p>
+                                {(!matchEnded && !match.completed) && (
+                                    <CountdownTimer
+                                        startTime={Date.now() + 1 * 60 * 1000} // 2 minutes from now
+                                        endTime={Date.now() + 62 * 60 * 1000}  // 1 hour 2 minutes from now
+                                        compact
+                                        renderTime={(msLeft: number, countdownType: 'starts' | 'ends' | 'ended') => {
+                                            console.log('🔍 Countdown Debug:', {
+                                                currentTime: new Date().toISOString(),
+                                                startTime: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+                                                endTime: new Date(Date.now() + 62 * 60 * 1000).toISOString(),
+                                                msLeft: msLeft,
+                                                countdownType: countdownType,
+                                                msLeftInMinutes: Math.floor(msLeft / (1000 * 60))
+                                            });
 
-                                    // Determine color
-                                    let colorClass = "text-blue-600 font-semibold";
-                                    if (currentTime >= match.startTime && currentTime <= match.endTime - 5 * 60 * 1000) {
-                                        colorClass = "text-green-700 font-semibold";
-                                    }
-                                    if (msLeft <= 5 * 60 * 1000) {
-                                        colorClass = "text-red-600 font-bold";
-                                    }
+                                            const totalSeconds = Math.floor(msLeft / 1000);
+                                            const days = Math.floor(totalSeconds / (3600 * 24));
+                                            const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+                                            const minutes = Math.floor((totalSeconds % 3600) / 60);
+                                            const seconds = totalSeconds % 60;
 
-                                    // Format time string with conditional days
-                                    let timeString;
-                                    if (days > 0) {
-                                        timeString = `${days}d ${hours}h ${minutes}m ${seconds}s`;
-                                    } else if (hours > 0) {
-                                        timeString = `${hours}h ${minutes}m ${seconds}s`;
-                                    } else {
-                                        timeString = `${minutes}m ${seconds}s`;
-                                    }
+                                            // Determine color based on countdown type and time left
+                                            let colorClass = "text-blue-600 font-semibold";
+                                            let statusText = "";
 
-                                    return (
-                                        <span className={colorClass}>
-                                            {timeString}
-                                        </span>
-                                    );
-                                }}
-                            />
-                        )}
+                                            if (countdownType === 'starts') {
+                                                colorClass = "text-blue-600 font-semibold";
+                                                statusText = "until start";
+                                            } else if (countdownType === 'ends') {
+                                                if (msLeft <= 5 * 60 * 1000) {
+                                                    colorClass = "text-red-600 font-bold";
+                                                } else {
+                                                    colorClass = "text-green-700 font-semibold";
+                                                }
+                                                statusText = "left to play";
+                                            } else {
+                                                colorClass = "text-gray-500";
+                                                statusText = "Match ended";
+                                            }
+
+                                            // Format time string
+                                            let timeString;
+                                            if (countdownType === 'ended') {
+                                                timeString = "Match ended";
+                                            } else if (days > 0) {
+                                                timeString = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+                                            } else if (hours > 0) {
+                                                timeString = `${hours}h ${minutes}m ${seconds}s`;
+                                            } else {
+                                                timeString = `${minutes}m ${seconds}s`;
+                                            }
+
+                                            return (
+                                                <span className={colorClass}>
+                                                    {timeString} {statusText && ` ${statusText}`}
+                                                </span>
+                                            );
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        )} */}
                     </div>
 
                 </div>
@@ -274,13 +298,6 @@ export const RenderMatchCard = ({
                         <FaSave className="mr-2" />
                         {t.saveResultsShort || t.saveResults}
                     </button>
-
-                    {/* Optional helper text for French */}
-                    {shouldDisable && (
-                        <p className="text-xs text-gray-500 text-center mt-1">
-                            {t.scoreEditingAvailable}
-                        </p>
-                    )}
 
 
                     {/* Help text */}

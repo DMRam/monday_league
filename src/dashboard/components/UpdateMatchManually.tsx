@@ -71,9 +71,9 @@ export const UpdateMatchManually: React.FC<UpdateMatchManuallyProps> = ({ teams 
     };
 
     // Simple version for quick score updates
-    const updateMatchScore = async (matchId: string, scoreA: number, scoreB: number, completed: boolean = true) => {
-        await updateMatchManually(matchId, "", "", { scoreA, scoreB, completed });
-    };
+    // const updateMatchScore = async (matchId: string, scoreA: number, scoreB: number, completed: boolean = true) => {
+    //     await updateMatchManually(matchId, "", "", { scoreA, scoreB, completed });
+    // };
 
     const handleSubmit = () => {
         updateMatchManually(

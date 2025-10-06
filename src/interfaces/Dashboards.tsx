@@ -50,3 +50,25 @@ export interface TeamWeekStats {
     wins: number;
     losses: number;
 }
+
+export interface Post {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  content: string;
+  imageUrl?: string;
+  likes: string[]; 
+  comments: Comment[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Comment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  content: string;
+  createdAt: Date;
+}

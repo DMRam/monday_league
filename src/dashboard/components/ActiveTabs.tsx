@@ -1,7 +1,7 @@
 import { FaChartLine, FaUserFriends, FaUsers } from "react-icons/fa";
 import { useEffect, useRef, useState } from "react";
 import type { ActiveTabsProps } from "../../interfaces/ActiveTabs";
-import type { Match, Team, TeamWeekStats } from "../../interfaces/Dashboards";
+import type { Match, Post, Team, TeamWeekStats } from "../../interfaces/Dashboards";
 import { format } from 'date-fns';
 import { fr as frLocale, enUS as enLocale } from 'date-fns/locale';
 import { useActiveTabs } from "../../hooks/useActiveTabs";
@@ -9,6 +9,9 @@ import { fetchWeekStats } from "../../services/firebaseService";
 import { GenerateSecondPeriodMatchesButton } from "./GenerateSecondPeriodMAtchesButton";
 import { RenderMatchCard } from "./RenderCardMatch";
 import { DefaultCase } from "./DefaultCase";
+import { CreatePost, PostCard } from "./WallComponents";
+import { fetchPosts, createPost, likePost, addComment, deletePost } from "../../services/firebaseService";
+
 
 export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
     const {
@@ -30,6 +33,10 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
         setActiveTab,
         t
     } = props;
+
+    const [posts, setPosts] = useState<Post[]>([]);
+const [postsLoading, setPostsLoading] = useState(true);
+    
 
     const [weekStats, setWeekStats] = useState<TeamWeekStats[]>([]);
     const [loading, setLoading] = useState(true);
