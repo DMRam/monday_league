@@ -9,6 +9,7 @@ import { fetchWeekStats } from "../../services/firebaseService";
 import { GenerateSecondPeriodMatchesButton } from "./GenerateSecondPeriodMAtchesButton";
 import { RenderMatchCard } from "./RenderCardMatch";
 import { DefaultCase } from "./DefaultCase";
+import WeekLabel from "../../utils/WeekDateGenerate";
 
 export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
     const {
@@ -28,11 +29,11 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
         setMatches,
         setTeams,
         setActiveTab,
-        t
+        t,
+        setSaving
     } = props;
 
     const [weekStats, setWeekStats] = useState<TeamWeekStats[]>([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const detailsRef = useRef<HTMLDivElement>(null);
@@ -74,6 +75,11 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
     };
 
     useEffect(() => {
+        setSaving(false)
+    }, [])
+
+
+    useEffect(() => {
         const loadData = async () => {
             setIsLoading(true);
             try {
@@ -93,8 +99,8 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                 setPoolBTeamsFirstPeriod(poolResults.poolBTeams);
 
                 // Set second period pools  
-                setPoolATeamsSecondPeriod(poolResults.premierPool);
-                setPoolBTeamsSecondPeriod(poolResults.secondaryPool);
+                setPoolATeamsSecondPeriod(poolResults.poolASecondPeriodTeams);
+                setPoolBTeamsSecondPeriod(poolResults.poolBSecondPeriodTeams);
 
             } catch (error) {
                 console.error("Error loading pool data:", error);
@@ -126,14 +132,14 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
     useEffect(() => {
         const loadWeekStats = async () => {
             try {
-                setLoading(true);
+                setIsLoading(true);
                 const stats = await fetchWeekStats(); // Fetch all weeks
                 setWeekStats(stats);
             } catch (err) {
                 setError(t.errors?.failedToLoadStats || 'Failed to load week statistics');
                 console.error('Error loading week stats:', err);
             } finally {
-                setLoading(false);
+                setIsLoading(false);
             }
         };
 
@@ -148,7 +154,7 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
         );
     }
 
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -256,13 +262,13 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                                                     <p className="text-2xl font-bold text-green-600">
                                                         {totalPoints}
                                                     </p>
-                                                    <p className="text-xs text-gray-600">{t.seasonPoints}</p>
+                                                    <p className="text-xs text-gray-600">{t.seasonPoints} points</p>
                                                 </div>
                                                 <div className="text-center p-3 bg-blue-50 rounded-lg">
                                                     <p className="text-xl font-bold text-blue-600">
                                                         {currentWeekPoints}
                                                     </p>
-                                                    <p className="text-xs text-gray-600">{t.week}</p>
+                                                    <p className="text-xs text-gray-600">{t.week} points</p>
                                                 </div>
                                             </div>
 
@@ -273,7 +279,8 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                                                     <div className="space-y-2">
                                                         {team.weeklyStats.slice().reverse().map((stats, _index) => (
                                                             <div key={stats.week} className="flex justify-between items-center text-xs">
-                                                                <span className="text-gray-600">{t.week} {stats.week}:</span>
+                                                                {/* <span className="text-gray-600">{t.week} {stats.week}:</span> */}
+                                                                <WeekLabel locale={t.week.includes('S') ? 'fr' : 'en'} week={stats.week} />
                                                                 <div className="flex gap-2">
                                                                     <span className={`px-2 py-1 rounded ${stats.wins > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                                                                         {stats.wins}W
@@ -406,7 +413,8 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold text-gray-800">
-                            {t.week} {currentWeek} {t.matches} {formattedDate}
+                            {/* {t.week} {currentWeek}  */}
+                            {t.matches} {formattedDate}
                         </h2>
                         <div className="flex space-x-4">
                             <button
@@ -455,6 +463,7 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                                                 user={user}
                                                 canEditScore={canEditScore}
                                                 updateMatchScore={updateMatchScore}
+                                                setSaving={setSaving}
                                                 saveMatchResults={saveMatchResults}
                                                 matches={matches}
                                                 setMatches={setMatches}
@@ -490,6 +499,7 @@ export const ActiveTabsRenderer = (props: ActiveTabsProps & { t: any }) => {
                                                     user={user}
                                                     canEditScore={canEditScore}
                                                     updateMatchScore={updateMatchScore}
+                                                    setSaving={setSaving}
                                                     saveMatchResults={saveMatchResults}
                                                     matches={matches}
                                                     setMatches={setMatches}

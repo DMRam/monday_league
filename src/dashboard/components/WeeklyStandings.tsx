@@ -29,6 +29,7 @@ export const WeeklyStandings = ({ teams, currentWeek, t }: WeeklyStandingsProps)
     const sortedTeams = [...teamsWithSessionTotals].sort((a, b) => b.totalSessionPoints - a.totalSessionPoints);
     const leadingTeam = sortedTeams[0];
 
+
     return (
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
             {/* Header */}
@@ -44,10 +45,10 @@ export const WeeklyStandings = ({ teams, currentWeek, t }: WeeklyStandingsProps)
                 </div>
 
                 {/* Current Week */}
-                <div className="bg-gray-50 px-4 py-2 rounded-lg">
+                {/* <div className="bg-gray-50 px-4 py-2 rounded-lg">
                     <span className="text-sm text-gray-600">{t.week}</span>
                     <span className="ml-2 font-bold text-gray-800">{currentWeek}</span>
-                </div>
+                </div> */}
             </div>
 
             {/* Top Team Highlight */}
@@ -109,7 +110,7 @@ export const WeeklyStandings = ({ teams, currentWeek, t }: WeeklyStandingsProps)
                         <div className="text-right">
                             <div className="text-xl font-bold text-gray-800">{team.totalSessionPoints}</div>
                             <div className="text-xs text-gray-500">
-                                
+
                                 {team.currentWeekPoints > 0 && ` (+${team.currentWeekPoints} this ${t.week})`}
                             </div>
                         </div>

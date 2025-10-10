@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaVolleyballBall, FaSignOutAlt, FaGlobe } from 'react-icons/fa';
 import { db } from '../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { useDashboard } from '../hooks/useDashboard';
 import type { Match, Team } from '../interfaces/Dashboards';
 import { AdminTab } from './components/AdminTab';
@@ -9,6 +9,7 @@ import { ActiveTabsRenderer } from './components/ActiveTabs';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { VolleyballLoader } from './components/VolleyballLoader';
 
 export const Dashboard = () => {
     const {
@@ -31,6 +32,7 @@ export const Dashboard = () => {
     const [activeTab, setActiveTab] = useState('matches');
     const [selectedTeam, setSelectedTeam] = useState<Team>();
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
     // Simple week calculation based on fixed start date
     const getCurrentWeek = (): number => {
@@ -59,68 +61,58 @@ export const Dashboard = () => {
     const [weeksToGenerate, setWeeksToGenerate] = useState(1);
 
     useEffect(() => {
-        const fetchTeams = async () => {
-            try {
-                const snapshot = await getDocs(collection(db, 'teams'));
-                const fetchedTeams: Team[] = snapshot.docs
-                    .filter(doc => {
-                        const data = doc.data();
-                        const isValid = data.name && data.coach;
-                        if (!isValid) {
-                            console.warn(`Skipping invalid team document: ${doc.id}`);
-                        }
-                        return isValid;
-                    })
-                    .map(doc => {
-                        const data = doc.data();
-                        return {
-                            id: doc.id,
-                            name: data.name,
-                            totalPoints: data.totalPoints || 0,
-                            pool: data.pool || 'Unassigned',
-                            coach: data.coach,
-                            players: data.players || [],
-                            currentDayPoints: data.currentDayPoints || 0,
-                            secondPeriodPoints: data.secondPeriodPoints || 0,
-                            weeklyStats: data.weeklyStats || []
-                        } as Team;
-                    });
+        setLoading(true);
 
-                setTeams(fetchedTeams);
-                console.log("Fetched teams:", fetchedTeams.length, fetchedTeams);
-            } catch (error) {
-                console.error('Error fetching teams:', error);
-            }
-        };
-
-        console.log("Teams after fetching:", teams);
-
-        const fetchMatches = async () => {
-            try {
-                const snapshot = await getDocs(collection(db, 'matches'));
-                const fetchedMatches: Match[] = snapshot.docs
-                    .map(doc => ({
+        const teamsRef = collection(db, 'teams');
+        const unsubscribeTeams = onSnapshot(teamsRef, (snapshot) => {
+            const fetchedTeams: Team[] = snapshot.docs
+                .filter(doc => {
+                    const data = doc.data();
+                    const isValid = data.name && data.coach;
+                    if (!isValid) {
+                        console.warn(`Skipping invalid team document: ${doc.id}`);
+                    }
+                    return isValid;
+                })
+                .map(doc => {
+                    const data = doc.data();
+                    return {
                         id: doc.id,
-                        ...doc.data()
-                    } as Match))
+                        name: data.name,
+                        totalPoints: data.totalPoints || 0,
+                        pool: data.pool || 'Unassigned',
+                        coach: data.coach,
+                        players: data.players || [],
+                        currentDayPoints: data.currentDayPoints || 0,
+                        secondPeriodPoints: data.secondPeriodPoints || 0,
+                        weeklyStats: data.weeklyStats || []
+                    } as Team;
+                })
+                .sort((a, b) => b.totalPoints - a.totalPoints);
 
-                setMatches(sortMatches(fetchedMatches));
-                console.log("Fetched matches:", fetchedMatches.length, fetchedMatches);
-            } catch (error) {
-                console.error('Error fetching matches:', error);
-            }
-        };
+            setTeams(fetchedTeams);
+            setSaving(false);
+        });
 
-        const fetchData = async () => {
-            setLoading(true);
-            await Promise.all([fetchTeams(), fetchMatches()]);
+        // --- Real-time sync for MATCHES ---
+        const matchesRef = collection(db, 'matches');
+        const unsubscribeMatches = onSnapshot(matchesRef, (snapshot) => {
+            const fetchedMatches: Match[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Match));
+
+            setMatches(sortMatches(fetchedMatches));
             setLoading(false);
+        });
+
+        // Clean up on unmount
+        return () => {
+            unsubscribeTeams();
+            unsubscribeMatches();
+            setSaving(false);
         };
-
-        fetchData();
     }, [currentWeek]);
-
-    console.log("Matches after sorting:", matches);
 
     const handleLogout = () => {
         logout();
@@ -143,6 +135,16 @@ export const Dashboard = () => {
     const standings = teams ? [...teams].sort((a, b) => b.totalPoints - a.totalPoints) : [];
 
     const renderContent = () => {
+        // Show loading state for initial load
+        if (loading) {
+            return (
+                <div className="flex flex-col items-center justify-center py-20">
+                    <VolleyballLoader size="large" />
+                    <p className="mt-4 text-gray-600 text-lg">{t.dashboard.loading}</p>
+                </div>
+            );
+        }
+
         if (activeTab === 'admin') {
             return (
                 <AdminTab
@@ -195,17 +197,27 @@ export const Dashboard = () => {
                 updateMatchScore={updateMatchScore}
                 user={user}
                 t={t.dashboard}
+                setSaving={setSaving}
             />
         );
     };
 
-    if (loading) {
-        return <div className="min-h-screen bg-gray-100 flex items-center justify-center">{t.dashboard.loading}</div>;
-    }
-
     return (
-        <div className="min-h-screen bg-gray-100">
-            <header className="bg-blue-800 text-white shadow-lg">
+        <div className="min-h-screen bg-gray-100 relative">
+            {/* Global Saving Overlay */}
+            {saving && (
+                <div className="fixed inset-0 bg-black/50 flex flex-col items-center justify-center z-50 backdrop-blur-sm transition-all duration-300">
+                    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center justify-center space-y-4 min-w-[200px]">
+                        <VolleyballLoader size="medium" />
+                        <p className="text-gray-700 font-medium text-lg">{t.dashboard.saving}</p>
+                        <p className="text-gray-500 text-sm text-center">
+                            {t.dashboard.savingDescription || "Please wait while we save your changes..."}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            <header className="bg-blue-800 text-white shadow-lg relative z-10">
                 <div className="container mx-auto px-4 py-3">
                     {/* Top row - logo and user actions */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">

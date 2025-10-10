@@ -42,7 +42,7 @@ export const GenerateSecondPeriodMatchesButton = ({
         setMessage({ type: null, text: '' });
 
         try {
-            const response = await generateSecondPeriodMatches(currentWeek, teams, matches, setMatches);
+            const response = await generateSecondPeriodMatches(currentWeek, teams, setMatches);
             response ? setMessage({ type: 'success', text: t.matchesGeneratedSuccess }) : setMessage({ type: 'error', text: t.errorGeneratingMatches });;
         } catch (error) {
             setMessage({ type: 'error', text: t.errorGeneratingMatches });
@@ -70,7 +70,7 @@ export const GenerateSecondPeriodMatchesButton = ({
     return (
         <div className="mb-4">
             {
-                allFirstPeriodCompleted ? (
+                (allFirstPeriodCompleted && user.role === 'admin') ? (
                     <button
                         type="button"
                         onClick={handleGenerateMatches}

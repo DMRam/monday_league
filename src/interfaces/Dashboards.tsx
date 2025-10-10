@@ -18,6 +18,14 @@ export interface WeeklyTeamStats {
     totalPoints: number;
     wins: number;
     losses: number;
+    matchPointsPerMatch?: {
+        [matchId: string]: {
+            period: number;
+            scoreA: number;
+            scoreB: number;
+            teamAId:string
+        }[];
+    };
 }
 
 export interface Match {
@@ -38,6 +46,7 @@ export interface Match {
     savedAt?: number;
     savedBy?: string;
     createdAt: number;
+    period: number
 }
 
 export interface TeamWeekStats {

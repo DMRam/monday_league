@@ -58,7 +58,8 @@ export const DefaultCase = ({
             <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-gray-800">
-                        {t.week} {currentWeek} {t.matches} {formattedDate}
+                        {/* {t.week} {currentWeek}  */}
+                        {t.matches} {formattedDate}
                     </h2>
                     <div className="flex space-x-4">
                         <button

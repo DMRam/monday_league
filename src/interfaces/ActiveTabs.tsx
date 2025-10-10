@@ -8,9 +8,9 @@ export interface ActiveTabsProps {
     nextWeek: () => void;
     currentWeekMatches: Match[]
     canEditScore: (match: Match, user: TeamUser) => boolean;
-    user: TeamUser | null
-    updateMatchScore: (matchId: string, newScoreA: number, newScoreB: number, matches: Match[], setMatches: (value: React.SetStateAction<Match[]>) => void) => void
-    saveMatchResults: (teams: Team[], setMatches: (value: React.SetStateAction<Match[]>) => void, matchId: string, matches: Match[], user: TeamUser) => Promise<void>;
+    user: TeamUser | null;
+    updateMatchScore: (matchId: string, newScoreA: number, newScoreB: number, matches: Match[], setMatches: (value: React.SetStateAction<Match[]>) => void, teams: Team[], user: TeamUser, _updatedTeam: "A" | "B", setLoading: (value: boolean) => void, setTeams?: (value: React.SetStateAction<Team[]>) => void) => void
+    saveMatchResults: (teams: Team[], _setMatches: (value: React.SetStateAction<Match[]>) => void, matchId: string, updatedMatches: Match[], user: TeamUser, setLoading: (value: boolean) => void, setTeams?: (value: React.SetStateAction<Team[]>) => void) => Promise<void>
     matches: Match[];
     setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
     secondaryPool: Team[]
@@ -22,4 +22,5 @@ export interface ActiveTabsProps {
     setTeams: any;
     teams: Team[] | undefined
     t: any;
+    setSaving: (value: boolean) => void
 }

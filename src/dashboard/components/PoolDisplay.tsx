@@ -139,9 +139,9 @@ export const PoolDisplay = ({
                 <div>
                     <h4 className="font-bold text-lg text-gray-800">{title}</h4>
                     <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-600">
+                        {/* <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-600">
                             {t.week || 'Week'} {week}
-                        </span>
+                        </span> */}
                         <span className="text-xs bg-blue-100 px-2 py-1 rounded-full text-blue-600">
                             {getPeriodDisplayName()}
                         </span>
@@ -193,11 +193,11 @@ export const PoolDisplay = ({
                                             <span className="font-semibold text-gray-800 truncate">
                                                 {team.name}
                                             </span>
-                                            {team.hasWeeklyStats && (
+                                            {/* {team.hasWeeklyStats && (
                                                 <span className="text-xs bg-green-100 text-green-700 px-1 rounded">
                                                     {t.week || 'Week'} {week}
                                                 </span>
-                                            )}
+                                            )} */}
                                         </div>
                                         <div className="flex items-center space-x-3 mt-1">
                                             {/* <span className="text-xs text-gray-500">

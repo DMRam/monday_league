@@ -138,7 +138,7 @@ export const Login = () => {
                 userData: docData,
                 loginTime: Date.now(),
             };
-            localStorage.setItem("session", JSON.stringify(sessionData));
+            localStorage.setItem("volleyballUser", JSON.stringify(sessionData));
 
             // Remember credentials if requested - use normalized names
             if (rememberMe) {

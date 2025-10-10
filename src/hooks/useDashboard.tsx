@@ -2,10 +2,19 @@ import React, { type Dispatch, type SetStateAction } from 'react'
 import { db } from '../services/firebase';
 import type { Match, Team } from '../interfaces/Dashboards';
 import type { TeamUser } from '../interfaces/User';
-import { doc, updateDoc, setDoc, collection, getDocs, addDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, collection, getDocs, addDoc, query, where, getDoc, DocumentReference } from "firebase/firestore";
 import { v4 as uuidv4 } from 'uuid';
+import { onSnapshot } from "firebase/firestore";
+
 type SetString = Dispatch<SetStateAction<string>>;
 type SetStringArray = Dispatch<SetStateAction<string[]>>;
+
+// Extend Window interface for matchSaveTimeouts
+declare global {
+    interface Window {
+        matchSaveTimeouts: Record<string, ReturnType<typeof setTimeout>>;
+    }
+}
 
 export const useDashboard = () => {
     // Normalize string for logins
@@ -106,6 +115,39 @@ export const useDashboard = () => {
             return poolA - poolB;
         });
     };
+
+    // === Real-time Sync ===
+    const listenToMatches = (
+        setMatches: (value: React.SetStateAction<Match[]>) => void
+    ) => {
+        const matchesRef = collection(db, "matches");
+
+        return onSnapshot(matchesRef, (snapshot) => {
+            const matchesData: Match[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Match));
+
+            setMatches(sortMatches(matchesData));
+        });
+    };
+
+    const listenToTeams = (
+        setTeams: (value: React.SetStateAction<Team[]>) => void
+    ) => {
+        const teamsRef = collection(db, "teams");
+
+        return onSnapshot(teamsRef, (snapshot) => {
+            const teamsData: Team[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Team));
+
+            // Sort teams by points descending for better leaderboard UX
+            setTeams(teamsData.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)));
+        });
+    };
+
 
 
     const generateMatches = async (
@@ -250,27 +292,78 @@ export const useDashboard = () => {
 
     const generateSecondPeriodMatches = async (
         week: number,
-        teams: Team[],
-        matches: Match[],
+        _teams: Team[],
         setMatches: (value: React.SetStateAction<Match[]>) => void
     ) => {
         console.log("=== Generating Second Period Matches ===");
         console.log("Target week:", week);
 
+        // Check Firebase directly if second period matches already exist
+        const secondPeriodMatchesQuery = query(
+            collection(db, "matches"),
+            where("week", "==", week),
+            where("isSecondPeriod", "==", true)
+        );
+
+        const secondPeriodMatchesSnapshot = await getDocs(secondPeriodMatchesQuery);
+
+        if (secondPeriodMatchesSnapshot.size > 0) {
+            console.log(`Second period matches for week ${week} already exist in Firebase. Aborting generation.`);
+            return;
+        }
+
+        console.log(`Generating second period matches for week ${week}...`);
+
         try {
-            // 1. Validate that we have teams
-            if (!teams || teams.length < 6) {
+            // 1. Get fresh data for this specific operation to avoid stale state
+            const [freshTeamsSnapshot, freshMatchesSnapshot] = await Promise.all([
+                getDocs(collection(db, 'teams')),
+                getDocs(query(collection(db, 'matches'), where('week', '==', week)))
+            ]);
+
+            // Process fresh teams data
+            const freshTeams: Team[] = freshTeamsSnapshot.docs
+                .filter(doc => {
+                    const data = doc.data();
+                    const isValid = data.name && data.coach;
+                    if (!isValid) {
+                        console.warn(`Skipping invalid team document: ${doc.id}`);
+                    }
+                    return isValid;
+                })
+                .map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        name: data.name,
+                        totalPoints: data.totalPoints || 0,
+                        pool: data.pool || 'Unassigned',
+                        coach: data.coach,
+                        players: data.players || [],
+                        currentDayPoints: data.currentDayPoints || 0,
+                        secondPeriodPoints: data.secondPeriodPoints || 0,
+                        weeklyStats: data.weeklyStats || []
+                    } as Team;
+                });
+
+            console.log("Fresh teams from Firebase:", freshTeams.map(t => `${t.name} (ID: ${t.id})`));
+
+            // 2. Validate that we have enough teams
+            if (freshTeams.length < 6) {
                 console.warn("Not enough teams to generate second period matches. Need at least 6 teams.");
+                alert("Not enough teams to generate second period matches. Need at least 6 teams.");
                 return;
             }
 
-            // 2. Check if first period matches exist for this week
-            const firstPeriodMatches = matches.filter(m =>
-                m.week === week &&
-                !m.isSecondPeriod
+            const freshMatches = freshMatchesSnapshot.docs.map(doc => doc.data());
+            console.log("Fresh matches from Firebase:", freshMatches.length);
+
+            // 3. Check if first period matches exist for this week
+            const firstPeriodMatches = freshMatches.filter(m =>
+                m.week === week && !m.isSecondPeriod
             );
 
-            console.log(`First-period matches for week ${week}:`, firstPeriodMatches);
+            console.log(`First-period matches for week ${week}:`, firstPeriodMatches.length);
 
             if (firstPeriodMatches.length === 0) {
                 console.log(`❌ No first period matches found for week ${week}. Generate first period matches first.`);
@@ -278,45 +371,51 @@ export const useDashboard = () => {
                 return;
             }
 
-            // 3. Check if second period matches already exist for this week
-            const existingSecondPeriodMatches = matches.filter(m =>
-                m.week === week &&
-                m.isSecondPeriod
-            );
-
-            if (existingSecondPeriodMatches.length > 0) {
-                console.log("✅ Second period matches already exist for week", week);
-                alert(`Second period matches for Week ${week} have already been generated.`);
-                return;
-            }
-
-            // 4. Ensure all first-period matches are completed
+            // 4. Check if all first-period matches are completed
             const allFirstPeriodDone = firstPeriodMatches.every(m => m.completed);
             console.log("All first-period matches completed?", allFirstPeriodDone);
 
             if (!allFirstPeriodDone) {
-                const incompleteMatches = firstPeriodMatches.filter(m => !m.completed);
-                console.log(`⏳ Cannot generate second period matches - ${incompleteMatches.length} first period matches are not completed`);
-                alert(`Please complete all first period matches for Week ${week} before generating second period matches.`);
+                console.log("❌ Not all first period matches are completed yet");
+                alert("Please complete all first period matches before generating second period matches.");
                 return;
             }
 
-            // 5. Calculate points for each team
-            const teamPoints: Record<string, number> = {};
-            firstPeriodMatches.forEach(m => {
-                teamPoints[m.teamA.id] = (teamPoints[m.teamA.id] || 0) + m.scoreA;
-                teamPoints[m.teamB.id] = (teamPoints[m.teamB.id] || 0) + m.scoreB;
-            });
-            console.log("Team points after first period:", teamPoints);
+            // 5. Calculate current week first-period points using FRESH teams data
+            console.log("Calculating team first-period points from weeklyStats using fresh data...");
 
-            // 6. Sort teams by points and split into second-period pools
-            const sortedTeams = [...teams].sort((a, b) => {
+            const teamPoints: Record<string, number> = {};
+
+            freshTeams.forEach(team => {
+                const currentWeekStats = team.weeklyStats?.find(w => w.week === week);
+                const points = currentWeekStats?.firstPeriodPoints || 0;
+                teamPoints[team.id] = points;
+
+                console.log(`Team ${team.name} (${team.id}): ${points} pts`);
+            });
+
+            console.log("✅ Team points (current week P1):", teamPoints);
+
+            // 6. Sort teams by points using the fresh data
+            const sortedTeams = [...freshTeams].sort((a, b) => {
                 const pointsA = teamPoints[a.id] || 0;
                 const pointsB = teamPoints[b.id] || 0;
-                return pointsB - pointsA; // Descending order (highest first)
+
+                // Secondary sort by name if points are equal, to ensure consistent ordering
+                if (pointsA === pointsB) {
+                    return a.name.localeCompare(b.name);
+                }
+
+                return pointsB - pointsA;
             });
 
             console.log("Teams sorted by points:", sortedTeams.map(t => `${t.name}: ${teamPoints[t.id] || 0} pts`));
+
+            // 7. Validate the sorting by logging each step
+            console.log("=== VALIDATION ===");
+            sortedTeams.forEach((team, index) => {
+                console.log(`${index + 1}. ${team.name}: ${teamPoints[team.id]} pts (ID: ${team.id})`);
+            });
 
             const pool1Teams = sortedTeams.slice(0, 3); // Positions 1, 2, 3
             const pool2Teams = sortedTeams.slice(3, 6); // Positions 4, 5, 6
@@ -324,19 +423,27 @@ export const useDashboard = () => {
             console.log("Pool 1 teams (positions 1-3):", pool1Teams.map((t, i) => `${i + 1}. ${t.name} (${teamPoints[t.id] || 0} pts)`));
             console.log("Pool 2 teams (positions 4-6):", pool2Teams.map((t, i) => `${i + 4}. ${t.name} (${teamPoints[t.id] || 0} pts)`));
 
+            // 8. Double-check the team IDs and points
+            console.log("=== TEAM ID VERIFICATION ===");
+            pool1Teams.forEach((team, index) => {
+                console.log(`Pool1[${index}]: ${team.name} (ID: ${team.id}) - Points: ${teamPoints[team.id]}`);
+            });
+            pool2Teams.forEach((team, index) => {
+                console.log(`Pool2[${index}]: ${team.name} (ID: ${team.id}) - Points: ${teamPoints[team.id]}`);
+            });
+
             if (pool1Teams.length < 3 || pool2Teams.length < 3) {
                 console.warn("Not enough teams to generate second period matches.");
                 alert("Not enough teams to generate second period matches. Need at least 6 teams.");
                 return;
             }
 
-            // 7. Define match slots (later times for second period)
+            // 9. Define match slots (later times for second period)
             const slots = [
                 { time: '21:50', hour: 21, minute: 50 },
                 { time: '22:10', hour: 22, minute: 10 },
                 { time: '22:30', hour: 22, minute: 30 },
             ];
-
 
             const createMatchDate = (slot: { hour: number; minute: number }, week: number) => {
                 const leagueStartDate = new Date(2025, 8, 22); // Month is 0-indexed (8 = September)
@@ -352,10 +459,8 @@ export const useDashboard = () => {
                 return targetDate;
             };
 
-            // 8. Helper: generate matches according to specific position-based pairing
+            // 10. Helper: generate matches according to specific position-based pairing
             const generatePoolMatches = async (poolTeams: Team[], poolLabel: string, gym: string, positionOffset: number) => {
-
-                // TODO Review expected matches
                 const matchesConfig = [
                     {
                         teamAIndex: 0,  // Position 1 vs 3
@@ -415,211 +520,520 @@ export const useDashboard = () => {
                         isSecondPeriod: true,
                         createdAt: Date.now(),
                     }, 2);
+
+                    console.log(`✅ Created second period match ${i + 1} in ${poolLabel}`);
+                    console.log("***---*** ", {
+                        pool: poolLabel,
+                        teamA: teamA.name,
+                        teamB: teamB.name,
+                        referee: refereeTeam.name,
+                        scoreA: 0,
+                        scoreB: 0,
+                        completed: false,
+                        startTime,
+                        endTime,
+                        gym,
+                        timeSlot: slot.time,
+                        matchNumber: matchNumber,
+                        isSecondPeriod: true,
+                        createdAt: Date.now(),
+                    });
                 }
             };
 
-            // 9. Generate matches for both pools with position offsets
+            // 11. Generate matches for both pools with position offsets
             await generatePoolMatches(pool1Teams, "Pool 1", "Gym 1", 0); // Positions 1-3
             await generatePoolMatches(pool2Teams, "Pool 2", "Gym 2", 3); // Positions 4-6
 
-
-            // 10. Fetch updated matches and set state
+            // 12. Fetch updated matches and set state
             const snapshot = await getDocs(collection(db, 'matches'));
             const fetchedMatches: Match[] = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
             } as Match));
 
-            // console.log("Fetched matches after 2nd period generation:", fetchedMatches);
+            console.log("Fetched matches after 2nd period generation:", fetchedMatches);
             setMatches(sortMatches(fetchedMatches));
 
             console.log(`✅ Second period matches generated for week ${week}`);
             alert(`Second period matches for Week ${week} generated successfully!`);
 
-            return true
+            return true;
 
         } catch (error) {
             console.error("Error generating second period matches:", error);
             alert("Error generating second period matches. Please check the console for details.");
-            // return false;
         }
     };
 
     // Match editing with referee team validation
     const canEditScore = (match: Match, user: TeamUser): boolean => {
-        console.log('User on CanEdit Function: ', user);
+        console.log('User on canEditScore:', user);
 
         // Admin can always edit
         if (user.role === 'admin') return true;
 
-        // Referee must be assigned to this match
-        const isRefereeForMatch = user.team === match.referee;
+        // Define all match-related team names
+        const matchTeams = [match.teamA.name, match.teamB.name, match.referee];
 
-        // Optional: Only allow editing if match has started
-        // const gameHasStarted = Date.now() >= match.startTime;
-        console.log("user.name: ", user.name)
-        console.log("user.team: ", user.team)
-        console.log("match.referee: ", match.referee)
+        // Check if user's team is one of those
+        const isRelatedToMatch = matchTeams.includes(user.team);
 
-        console.log("isRefereeForMatch: ", isRefereeForMatch)
+        console.log("user.name:", user.name);
+        console.log("user.team:", user.team);
+        console.log("match.referee:", match.referee);
+        console.log("match.teamA:", match.teamA.name);
+        console.log("match.teamB:", match.teamB.name);
+        console.log("isRelatedToMatch:", isRelatedToMatch);
 
-        return isRefereeForMatch;
+        return isRelatedToMatch;
     };
 
-    // Change score to dropdown select
     const updateMatchScore = (
         matchId: string,
         newScoreA: number,
         newScoreB: number,
         matches: Match[],
-        setMatches: (value: React.SetStateAction<Match[]>) => void
+        setMatches: (value: React.SetStateAction<Match[]>) => void,
+        teams: Team[],
+        user: TeamUser,
+        _updatedTeam: 'A' | 'B',
+        setSaving: (value: boolean) => void,
+        setTeams?: (value: React.SetStateAction<Team[]>) => void,
     ) => {
-        const match = matches.find(m => m.id === matchId);
-        if (!match) return;
 
-        setMatches(matches.map(m =>
+        setSaving(true);
+        // Create the updated matches array first
+        const updatedMatches = matches.map(m =>
             m.id === matchId ? { ...m, scoreA: newScoreA, scoreB: newScoreB } : m
-        ));
-    };
+        );
 
+        // Find the updated match from the NEW array
+        const updatedMatch = updatedMatches.find(m => m.id === matchId);
+        if (!updatedMatch) return;
+
+        // Update the state
+        // setMatches(updatedMatches);
+
+        // Clear any existing timeout for this match
+        if (window.matchSaveTimeouts) {
+            clearTimeout(window.matchSaveTimeouts[matchId]);
+        } else {
+            window.matchSaveTimeouts = {};
+        }
+
+        console.log("UPDATING!!!!!")
+
+        // Debounce: wait 2s before saving to Firebase
+        window.matchSaveTimeouts[matchId] = setTimeout(async () => {
+            try {
+                await saveMatchResults(teams, setMatches, matchId, updatedMatches, user, setSaving, setTeams);
+            } catch (err) {
+                console.error("Error saving match:", err);
+            } finally {
+                setSaving(false);
+            }
+            delete window.matchSaveTimeouts[matchId];
+        }, 2000);
+    };
 
     const saveMatchResults = async (
         teams: Team[],
-        setMatches: (value: React.SetStateAction<Match[]>) => void,
+        _setMatches: (value: React.SetStateAction<Match[]>) => void,
         matchId: string,
-        matches: Match[],
-        user: TeamUser
+        updatedMatches: Match[],
+        user: TeamUser,
+        setSaving: (value: boolean) => void,
+        setTeams?: (value: React.SetStateAction<Team[]>) => void
+
     ) => {
 
-        console.log("=== Saving Match Results ===");
-        console.log("Match ID ---->:", matchId.toString);
-        console.log("User:", user);
+        const currentMatch = updatedMatches.find(m => m.id === matchId);
 
-        const match = matches.find(m => m.id === matchId);
-        if (!match || !canEditScore(match, user)) {
-            console.log("Cannot edit match:", matchId, match);
+        console.log("🔍 Debug canEditScore check:");
+        console.log("currentMatch:", currentMatch);
+        console.log("user:", user);
+
+        if (!currentMatch) {
+            console.log("❌ No current match found");
             return alert("Cannot edit match");
         }
 
-        console.log("Saving match result for:", matchId, match);
+        const canEdit = canEditScore(currentMatch, user);
+        console.log("canEditScore result:", canEdit);
 
-        console.log("Current teams:", teams);
+        if (!canEdit) {
+            console.log("❌ User cannot edit this match");
+            return alert("Cannot edit match");
+        }
+        if (!currentMatch || !canEditScore(currentMatch, user)) return alert("Cannot edit match");
 
-        const teamA = teams.find(t => normalizeString(t.id) === normalizeString(match.teamA.id));
-        const teamB = teams.find(t => normalizeString(t.id) === normalizeString(match.teamB.id));
+        const teamA = teams.find(t => normalizeString(t.id) === normalizeString(currentMatch.teamA.id));
+        const teamB = teams.find(t => normalizeString(t.id) === normalizeString(currentMatch.teamB.id));
 
-        console.log("Teams involved:", teamA, teamB);
+        if (!teamA || !teamB) return console.error("Missing teamA or teamB");
+
+        const isTeamAWinner = currentMatch.scoreA > currentMatch.scoreB;
+        const isTeamBWinner = currentMatch.scoreB > currentMatch.scoreA;
+        const isTie = currentMatch.scoreA === currentMatch.scoreB;
+
+        let updatedTeamA: Team | null = null;
+        let updatedTeamB: Team | null = null;
 
         const updateTeamStats = async (
-            team: Team | undefined,
-            points: number,
-            isWinner: boolean,
-            isLoser: boolean
+            match: Match,
+            pointsTeamA: number,
+            pointsTeamB: number,
+            isTeamAWinner: boolean,
+            isTeamBWinner: boolean,
+            isTeamALoser: boolean,
+            isTeamBLoser: boolean
         ) => {
-            if (!team) return console.warn("No team found to update stats");
+            const teamRefTeamA = doc(db, "teams", match.teamA.id);
+            const teamRefTeamB = doc(db, "teams", match.teamB.id);
 
-            const teamRef = doc(db, "teams", team.id);
+            const teamASnap = await getDoc(teamRefTeamA);
+            const teamBSnap = await getDoc(teamRefTeamB);
 
-            console.log(`Updating stats for team: ${team.name}`);
-            console.log("Current team stats:", team);
+            const existingDataA = teamASnap.exists() ? teamASnap.data() : {};
+            const existingDataB = teamBSnap.exists() ? teamBSnap.data() : {};
 
-            // --- Update top-level fields (accumulate points) ---
-            const updateData: Partial<Team> = {
+            // Helper function to update a single team's stats
+            const updateSingleTeamStats = async (
+                teamRef: DocumentReference,
+                existingData: any,
+                teamId: string,
+                isThisTeamA: boolean,
+                points: number,
+                isWinner: boolean,
+                isLoser: boolean
+            ): Promise<Team> => {
+                const existingWeeklyStats = existingData.weeklyStats ? [...existingData.weeklyStats] : [];
+                const weekIndex = existingWeeklyStats.findIndex(ws => ws.week === match.week);
 
-                // Accumulate points over time
-                totalPoints: (team.totalPoints || 0) + points,
+                // Store the scores with team identification
+                const matchData = {
+                    period: match.isSecondPeriod ? 2 : 1,
+                    scoreA: pointsTeamA,
+                    scoreB: pointsTeamB,
+                    teamAId: match.teamA.id,
+                    teamBId: match.teamB.id,
+                    thisTeamId: teamId,
+                    thisTeamIsTeamA: isThisTeamA,
+                };
 
-                // firstPeriodPoints: !match.isSecondPeriod ?
-                //     (team.firstPeriodPoints || 0) + points :
-                //     (team.firstPeriodPoints || 0),
+                if (weekIndex >= 0) {
+                    const weekStats = { ...existingWeeklyStats[weekIndex] };
+                    const existingMatchPoints = { ...(weekStats.matchPointsPerMatch || {}) };
 
-                // secondPeriodPoints: match.isSecondPeriod
-                //     ? (team.secondPeriodPoints || 0) + points
-                //     : team.secondPeriodPoints || 0,
+                    // Get existing periods for this specific match ID
+                    const existingPeriods = existingMatchPoints[match.id] || [];
+
+                    // Find if this specific period already exists for this match
+                    const periodIndex = existingPeriods.findIndex((mp: any) => mp.period === matchData.period);
+
+                    let updatedPeriods;
+                    if (periodIndex >= 0) {
+                        // Update existing period for this specific match
+                        updatedPeriods = [...existingPeriods];
+                        updatedPeriods[periodIndex] = matchData;
+                    } else {
+                        // Add new period for this specific match (different match, same period)
+                        updatedPeriods = [...existingPeriods, matchData];
+                    }
+
+                    // Calculate TOTAL points for this week from ALL matches
+                    let totalWeekPoints = 0;
+                    let firstPeriodPoints = 0;
+                    let secondPeriodPoints = 0;
+                    let wins = 0;
+                    let losses = 0;
+
+                    // Calculate from all matches in this week
+                    const allMatchPoints = { ...existingMatchPoints, [match.id]: updatedPeriods };
+
+                    Object.values(allMatchPoints).forEach((periods: any) => {
+                        periods.forEach((periodData: any) => {
+                            // Only count points if this period data belongs to our team
+                            if (periodData.thisTeamId === teamId) {
+                                const periodPoints = periodData.thisTeamIsTeamA ? periodData.scoreA : periodData.scoreB;
+                                const isWin = periodData.thisTeamIsTeamA ?
+                                    periodData.scoreA > periodData.scoreB :
+                                    periodData.scoreB > periodData.scoreA;
+                                const isLoss = periodData.thisTeamIsTeamA ?
+                                    periodData.scoreA < periodData.scoreB :
+                                    periodData.scoreB < periodData.scoreA;
+
+                                totalWeekPoints += periodPoints;
+
+                                if (periodData.period === 1) {
+                                    firstPeriodPoints += periodPoints;
+                                } else if (periodData.period === 2) {
+                                    secondPeriodPoints += periodPoints;
+                                }
+
+                                if (isWin) wins += 1;
+                                if (isLoss) losses += 1;
+                            }
+                        });
+                    });
+
+                    existingWeeklyStats[weekIndex] = {
+                        ...weekStats,
+                        totalPoints: totalWeekPoints,
+                        firstPeriodPoints: firstPeriodPoints,
+                        secondPeriodPoints: secondPeriodPoints,
+                        wins: wins,
+                        losses: losses,
+                        matchPointsPerMatch: allMatchPoints,
+                    };
+                } else {
+                    // First time adding stats for this week
+                    const totalPoints = points || 0;
+                    const firstPeriodPoints = !match.isSecondPeriod ? totalPoints : 0;
+                    const secondPeriodPoints = match.isSecondPeriod ? totalPoints : 0;
+
+                    existingWeeklyStats.push({
+                        week: match.week,
+                        totalPoints: totalPoints,
+                        firstPeriodPoints: firstPeriodPoints,
+                        secondPeriodPoints: secondPeriodPoints,
+                        wins: isWinner ? 1 : 0,
+                        losses: isLoser ? 1 : 0,
+                        matchPointsPerMatch: {
+                            [match.id]: [matchData],
+                        },
+                    });
+                }
+
+                // Update total points correctly by calculating from all weekly stats
+                const finalTotalPoints = existingWeeklyStats.reduce((total, week) => total + (week.totalPoints || 0), 0);
+
+                const updateData = {
+                    totalPoints: finalTotalPoints,
+                    weeklyStats: existingWeeklyStats,
+                    lastUpdatedAt: Date.now(),
+                };
+
+                await updateDoc(teamRef, updateData);
+                console.log(`✅ Updated Firestore for team ${teamId}`);
+
+                // Return the complete updated team object
+                return {
+                    id: teamId,
+                    name: existingData.name || '',
+                    totalPoints: finalTotalPoints,
+                    pool: existingData.pool || '',
+                    coach: existingData.coach || '',
+                    players: existingData.players || [],
+                    currentDayPoints: existingData.currentDayPoints || 0,
+                    firstPeriodPoints: existingData.firstPeriodPoints || 0,
+                    secondPeriodPoints: existingData.secondPeriodPoints || 0,
+                    weeklyStats: existingWeeklyStats,
+                } as Team;
             };
 
-            const existingWeeklyStats = team.weeklyStats || [];
-            const weekIndex = existingWeeklyStats.findIndex(ws => ws.week === match.week);
+            // Update both teams
+            const [newTeamA, newTeamB] = await Promise.all([
+                updateSingleTeamStats(teamRefTeamA, existingDataA, match.teamA.id, true, pointsTeamA, isTeamAWinner, isTeamALoser),
+                updateSingleTeamStats(teamRefTeamB, existingDataB, match.teamB.id, false, pointsTeamB, isTeamBWinner, isTeamBLoser)
+            ]);
 
-            console.log(`Existing weekly stats for ${team.name}:`, existingWeeklyStats);
-
-
-            if (weekIndex >= 0) {
-                console.log(`Found existing stats for week ${match.week} for team ${team.name}, updating...`);
-                // Update existing week stats - ACCUMULATE points from both matches
-                const weekStats = existingWeeklyStats[weekIndex];
-
-                existingWeeklyStats[weekIndex] = {
-                    ...weekStats,
-                    // This accumulates points from both first and second period matches per week
-                    totalPoints: (weekStats.totalPoints || 0) + points,
-                    firstPeriodPoints: !match.isSecondPeriod ?
-                        (weekStats.firstPeriodPoints || 0) + points :
-                        (weekStats.firstPeriodPoints || 0),
-                    secondPeriodPoints: match.isSecondPeriod ?
-                        (weekStats.secondPeriodPoints || 0) + points :
-                        (weekStats.secondPeriodPoints || 0),
-                    wins: (weekStats.wins || 0) + (isWinner ? 1 : 0),
-                    losses: (weekStats.losses || 0) + (isLoser ? 1 : 0),
-                };
-            } else {
-                console.log(`No existing stats for week ${match.week}, creating new entry for ${team.name}`);
-                // Create new week stats
-                existingWeeklyStats.push({
-                    week: match.week,
-                    totalPoints: points,
-                    firstPeriodPoints: !match.isSecondPeriod ? points : 0,
-                    secondPeriodPoints: match.isSecondPeriod ? points : 0,
-                    wins: isWinner ? 1 : 0,
-                    losses: isLoser ? 1 : 0,
-                });
-            }
-
-            updateData.weeklyStats = existingWeeklyStats;
-
-            console.log("Updating team stats:", team.name, updateData);
-            await updateDoc(teamRef, updateData);
+            updatedTeamA = newTeamA;
+            updatedTeamB = newTeamB;
         };
 
-        // --- Decide winners/losers ---
-        const isTeamAWinner = match.scoreA > match.scoreB;
-        const isTeamBWinner = match.scoreB > match.scoreA;
-        const isTie = match.scoreA === match.scoreB;
+        // Call the updateTeamStats function
+        await updateTeamStats(
+            currentMatch,
+            currentMatch.scoreA,
+            currentMatch.scoreB,
+            isTeamAWinner,
+            isTeamBWinner,
+            !isTeamAWinner && !isTie,
+            !isTeamBWinner && !isTie
+        );
 
-        console.log("Match outcome:", { isTeamAWinner, isTeamBWinner, isTie });
-
-        // --- Update team stats in Firestore ---
-        console.log("Updating stats for Team A:", teamA?.name);
-        console.log("Updating stats for Team B:", teamB?.name);
-        await updateTeamStats(teamA, match.scoreA, isTeamAWinner, !isTeamAWinner && !isTie);
-        await updateTeamStats(teamB, match.scoreB, isTeamBWinner, !isTeamBWinner && !isTie);
-
+        // Update match document itself
         const matchRef = doc(db, "matches", matchId);
-
-        console.log("Updating match document:", matchId, {
-            scoreA: match.scoreA,
-            scoreB: match.scoreB,
-            completed: true,
-            savedAt: Date.now(),
-        });
         await updateDoc(matchRef, {
-            scoreA: match.scoreA,
-            scoreB: match.scoreB,
-            completed: true,
-            savedAt: Date.now(),
+            scoreA: currentMatch.scoreA,
+            scoreB: currentMatch.scoreB,
+            updatedAt: Date.now(),
         });
 
-        setMatches(matches.map(m => (m.id === matchId ? { ...m, completed: true } : m)));
+        console.log("✅ Match and both teams updated successfully!");
 
-        console.log("Match saved. Updated matches:", matches);
 
-        const allFirstPeriodDone = matches
-            .filter(m => m.week === match.week && !m.isSecondPeriod)
-            .every(m => m.completed);
+        // This close the volleyball loading...
+        setSaving(false)
 
-        console.log("All first period matches done for week", match.week, ":", allFirstPeriodDone);
+        // Update local teams state if setTeams function is provided
+        if (setTeams && updatedTeamA && updatedTeamB) {
+            setTeams(prevTeams =>
+                prevTeams.map(team => {
+                    if (team.id === updatedTeamA!.id) return updatedTeamA!;
+                    if (team.id === updatedTeamB!.id) return updatedTeamB!;
+                    return team;
+                })
+            );
+            console.log("✅ Updated local teams state");
+        }
+
+        if (!currentMatch.isSecondPeriod) {
+            await handleFirstPeriodCompletion(
+                currentMatch.week,
+                updatedMatches,
+                _setMatches,
+                teams,
+                user
+            );
+        } else {
+            markSecondPeriodMatchesAsCompleted(
+                currentMatch.week,
+                updatedMatches,
+                _setMatches,
+            )
+        }
     };
 
+
+    const handleFirstPeriodCompletion = async (
+        week: number,
+        matches: Match[],
+        setMatches: any,
+        teams: Team[],
+        _user: TeamUser
+    ) => {
+        try {
+            // Check Firebase directly if second period matches already exist
+            const secondPeriodMatchesQuery = query(
+                collection(db, "matches"),
+                where("week", "==", week),
+                where("isSecondPeriod", "==", true)
+            );
+
+            const secondPeriodMatchesSnapshot = await getDocs(secondPeriodMatchesQuery);
+            const existingSecondPeriodMatches = secondPeriodMatchesSnapshot.docs.map(doc => doc.data());
+
+            // Check if all first period matches have scores entered (both scores > 0)
+            const firstPeriodMatches = matches.filter(m =>
+                m.week === week && !m.isSecondPeriod
+            );
+
+            // Check if all 6 matches have both scores higher than 0
+            const allFirstPeriodDone = firstPeriodMatches.every(m =>
+                m.scoreA > 0 && m.scoreB > 0
+            );
+
+            console.log("All first-period matches have scores > 0?", allFirstPeriodDone);
+            console.log("First period matches status:", firstPeriodMatches.map(m => ({
+                id: m.id,
+                scoreA: m.scoreA,
+                scoreB: m.scoreB,
+                completed: m.completed
+            })));
+
+            if (!allFirstPeriodDone) {
+                console.log("Not all first period matches have scores entered yet");
+                return; // Don't proceed if not all matches have scores
+            }
+
+            if (existingSecondPeriodMatches.length > 0) {
+                console.log("Second period matches already exist in Firebase for week", week, "- skipping generation");
+
+                await markFirstPeriodMatchesAsCompleted(week, matches, setMatches);
+
+                alert(`First period matches for Week ${week} are completed! Second period matches already exist.`);
+
+                window.location.reload();
+                return;
+            }
+
+
+            console.log("No second period matches found in Firebase - proceeding with generation");
+
+            // Mark first period matches as completed
+            await markFirstPeriodMatchesAsCompleted(week, matches, setMatches);
+
+            console.log("All first period matches completed for week", week, "- generating second period matches...");
+            await generateSecondPeriodMatches(week, teams, setMatches);
+            console.log("Returned from generating second period matches");
+
+            alert(`All first period matches for Week ${week} are completed! Second period matches have been generated.`);
+
+        } catch (error) {
+            console.error("Error handling first period completion:", error);
+            alert("Error completing first period matches. Please try again.");
+        }
+    };
+
+    const markFirstPeriodMatchesAsCompleted = async (week: number, matches: Match[], setMatches: any) => {
+        // Set Matches to completed on Firebase for all first period matches of this week
+        const completionPromises = matches.map(async m => {
+            if (m.week === week && !m.isSecondPeriod && !m.completed) {
+                const matchRef = doc(db, "matches", m.id);
+                console.log("Setting match to completed:", m.id);
+                await updateDoc(matchRef, { completed: true });
+            }
+        });
+
+        await Promise.all(completionPromises);
+
+        // Set Matches to completed in state for all first period matches of this week
+        console.log("Setting all first period matches to completed for week", week);
+        const updatedMatches = matches.map(m => {
+            if (m.week === week && !m.isSecondPeriod) {
+                return { ...m, completed: true };
+            }
+            return m;
+        });
+
+        setMatches(updatedMatches);
+        console.log("All first period matches marked as completed for week", week);
+    };
+
+    const markSecondPeriodMatchesAsCompleted = async (week: number, matches: Match[], setMatches: any) => {
+        // Get only second period matches for this week
+        const secondPeriodMatches = matches.filter(m =>
+            m.week === week && m.isSecondPeriod
+        );
+
+        // Check if all second period matches have scores entered
+        const allSecondPeriodDone = secondPeriodMatches.every(m =>
+            m.scoreA > 0 && m.scoreB > 0
+        );
+
+        console.log("All second period matches have scores > 0?", allSecondPeriodDone);
+
+        if (!allSecondPeriodDone) {
+            console.log("Not all second period matches have scores entered yet");
+            return; // Don't mark as completed if not all scores are entered
+        }
+
+        // Set Matches to completed on Firebase for all second period matches of this week
+        const completionPromises = secondPeriodMatches.map(async m => {
+            if (!m.completed) {
+                const matchRef = doc(db, "matches", m.id);
+                console.log("Setting second period match to completed:", m.id);
+                await updateDoc(matchRef, { completed: true });
+            }
+        });
+
+        await Promise.all(completionPromises);
+
+        // Set Matches to completed in state for all second period matches of this week
+        console.log("Setting all second period matches to completed for week", week);
+        const updatedMatches = matches.map(m => {
+            if (m.week === week && m.isSecondPeriod && !m.completed) {
+                return { ...m, completed: true };
+            }
+            return m;
+        });
+
+        setMatches(updatedMatches);
+        console.log("All second period matches marked as completed for week", week);
+    };
 
     return {
         addTeam,
@@ -632,6 +1046,8 @@ export const useDashboard = () => {
         saveMatchResults,
         sortMatches,
         normalizeString,
-        generateSecondPeriodMatches
+        generateSecondPeriodMatches,
+        listenToMatches,
+        listenToTeams
     }
 }

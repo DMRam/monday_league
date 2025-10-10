@@ -1,8 +1,6 @@
-import { FaSave } from "react-icons/fa";
 import { format } from "date-fns";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { enUS, fr } from "date-fns/locale";
-import { CountdownTimer } from "./CountDown";
 import type { Match, Team } from "../../interfaces/Dashboards";
 import type { TeamUser } from "../../interfaces/User";
 
@@ -17,8 +15,8 @@ export const RenderMatchCard = ({
     match,
     user,
     canEditScore,
+    setSaving,
     updateMatchScore,
-    saveMatchResults,
     matches,
     setMatches,
     teams,
@@ -29,8 +27,9 @@ export const RenderMatchCard = ({
     match: Match;
     user: any;
     canEditScore: (match: any, user: any) => boolean;
-    updateMatchScore: any;
-    saveMatchResults: ((teams: Team[], setMatches: (value: React.SetStateAction<Match[]>) => void, matchId: string, matches: Match[], user: TeamUser) => Promise<void>);
+    updateMatchScore: (matchId: string, newScoreA: number, newScoreB: number, matches: Match[], setMatches: (value: React.SetStateAction<Match[]>) => void, teams: Team[], user: TeamUser, _updatedTeam: "A" | "B", setLoading: (value: boolean) => void, setTeams?: (value: React.SetStateAction<Team[]>) => void) => void
+    saveMatchResults: (teams: Team[], _setMatches: (value: React.SetStateAction<Match[]>) => void, matchId: string, updatedMatches: Match[], user: TeamUser, setLoading: (value: boolean) => void, setTeams?: (value: React.SetStateAction<Team[]>) => void) => Promise<void>
+    setSaving: (value: boolean) => void,
     matches: any[];
     setMatches: any;
     teams: any[];
@@ -39,39 +38,35 @@ export const RenderMatchCard = ({
     t: any
 }) => {
 
-    const [currentTime, setCurrentTime] = useState(Date.now());
-    const [showConfirmation, setShowConfirmation] = useState(false);
 
-    useEffect(() => {
-        const interval = setInterval(() => setCurrentTime(Date.now()), 30000);
-        return () => clearInterval(interval);
-    }, []);
+
+
+    console.log("---- User in RenderMatchCard:", user);
+    const [currentTime, _setCurrentTime] = useState(Date.now());
+
+    // useEffect(() => {
+    //     const interval = setInterval(() => setCurrentTime(Date.now()), 30000);
+    //     return () => clearInterval(interval);
+    // }, []);
 
     const matchHasStarted = currentTime >= match.startTime;
     const matchEnded = currentTime > match.endTime;
     const canEdit = !match.completed && canEditScore(match, user);
     const shouldDisable = user.role !== "admin" && !matchHasStarted;
 
-    useEffect(() => {
-        setCurrentTime(Date.now());
-    }, [showConfirmation])
-
     console.log("Rendering match:", match.id, "Can edit:", canEdit, "Should disable:", shouldDisable);
-
-
-
 
     const dateFnsLocale = localeMap[language];
 
     const formatTime = (ts: number) => format(new Date(ts), "HH:mm", { locale: dateFnsLocale });
     const formatDate = (ts: number) => format(new Date(ts), "MMM d, HH:mm", { locale: dateFnsLocale });
 
-    const handleSaveClick = () => setShowConfirmation(true);
-    const confirmSave = () => {
-        saveMatchResults(teams ?? [], setMatches, match.id, matches, user);
-        setShowConfirmation(false);
-    };
-    const cancelSave = () => setShowConfirmation(false);
+    // const handleSaveClick = () => setShowConfirmation(true);
+    // const confirmSave = () => {
+    //     saveMatchResults(teams ?? [], setMatches, match.id, matches, user);
+    //     setShowConfirmation(false);
+    // };
+    // const cancelSave = () => setShowConfirmation(false);
 
     return (
         <div className={`bg-white border rounded-xl p-6 shadow-sm transition duration-200 hover:shadow-lg ${match.completed
@@ -81,7 +76,7 @@ export const RenderMatchCard = ({
                 : "border-gray-200"
             }`}>
             {/* Confirmation Dialog */}
-            {showConfirmation && (
+            {/* {showConfirmation && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-sm mx-4">
                         <h3 className="text-lg font-semibold mb-4">{t.saveResults}</h3>
@@ -104,7 +99,7 @@ export const RenderMatchCard = ({
                         </div>
                     </div>
                 </div>
-            )}
+            )} */}
 
             {/* Pool & Status */}
             <div className="flex justify-between items-center mb-4">
@@ -132,7 +127,7 @@ export const RenderMatchCard = ({
                     </p>
                     <div className="text-xs text-gray-500 mt-1">
                         <p>{formatDate(match.startTime)} • {match.gym}</p>
-                        {(!matchEnded && !match.completed) && (
+                        {/* {(!matchEnded && !match.completed) && (
                             <CountdownTimer
                                 startTime={match.startTime}
                                 endTime={match.endTime}
@@ -170,7 +165,7 @@ export const RenderMatchCard = ({
                                     );
                                 }}
                             />
-                        )}
+                        )} */}
                     </div>
 
                 </div>
@@ -228,7 +223,11 @@ export const RenderMatchCard = ({
                                         match.scoreB,
                                         matches,
                                         setMatches,
-                                        user
+                                        teams ?? [],
+                                        user,
+                                        "A",
+                                        setSaving,
+                                        setTeams,
                                     )
                                 }
                                 disabled={shouldDisable}
@@ -251,7 +250,11 @@ export const RenderMatchCard = ({
                                         Number(e.target.value),
                                         matches,
                                         setMatches,
-                                        user
+                                        teams ?? [],
+                                        user,
+                                        "B",
+                                        setSaving,
+                                        setTeams,
                                     )
                                 }
                                 disabled={shouldDisable}
@@ -263,8 +266,9 @@ export const RenderMatchCard = ({
                         </div>
                     </div>
 
+
                     {/* Save Button */}
-                    <button
+                    {/* <button
                         type="button"
                         onClick={handleSaveClick}
                         className={`w-full text-white py-2 rounded-lg flex items-center justify-center transition text-sm font-semibold 
@@ -273,7 +277,7 @@ export const RenderMatchCard = ({
                     >
                         <FaSave className="mr-2" />
                         {t.saveResultsShort || t.saveResults}
-                    </button>
+                    </button> */}
 
                     {/* Optional helper text for French */}
                     {shouldDisable && (

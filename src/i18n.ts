@@ -168,6 +168,8 @@ export const translations = {
       areYouSureSave: "Are you sure you want to save the scores?",
       cancel: "Cancel",
       yesSaveScores: "Yes, Save Scores",
+      saving: "Saving...",
+      savingDescription: "Please wait while we save your changes...",
     },
   },
   fr: {
@@ -317,7 +319,8 @@ export const translations = {
       generateSecondPeriodMatches: "Générer les matchs de deuxième période",
       generatingMatches: "Génération des matchs...",
       matchesGeneratedSuccess: "Matchs de deuxième période générés avec succès",
-      errorGeneratingMatches: "Erreur lors de la génération des matchs - vérifiez la complétion de la première période",
+      errorGeneratingMatches:
+        "Erreur lors de la génération des matchs - vérifiez la complétion de la première période",
 
       completed: "Terminé",
       scheduled: "Programmé",
@@ -337,6 +340,9 @@ export const translations = {
       areYouSureSave: "Êtes-vous sûr de vouloir sauvegarder les scores?",
       cancel: "Annuler",
       yesSaveScores: "Oui, sauvegarder",
+      saving: "Enregistrement…",
+      savingDescription:
+        "Veuillez patienter pendant que nous enregistrons vos modifications…",
     },
   },
 };

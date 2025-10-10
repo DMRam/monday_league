@@ -32,10 +32,6 @@ export const useActiveTabs = () => {
                 (m) => m.pool === poolName && m.week === week
             );
 
-
-
-
-
             console.log(`All team names in ${poolName} for week ${week}:`, allTeams);
 
             allTeams.map(t => console.log(`Team: ${t.name}`));
@@ -148,33 +144,48 @@ export const useActiveTabs = () => {
             console.log("First Period - Pool 1:", poolATeams.map(t => t.name));
             console.log("First Period - Pool 2:", poolBTeams.map(t => t.name));
 
-            // Combine all teams and sort by points to get overall ranking for SECOND PERIOD
-            const allTeamsSorted = [...poolATeams, ...poolBTeams].sort(
-                (a, b) => b.currentDayPoints - a.currentDayPoints
-            );
+            // Combine all teams and sort by points to get overall ranking for FIRST PERIOD
+            const allTeamsSorted = [...poolATeams, ...poolBTeams].sort((a, b) => {
+                const getCurrentWeekFirstPoints = (team: Team) => {
+                    if (!team.weeklyStats || team.weeklyStats.length === 0) return 0;
 
-            console.log("All teams sorted by points:", allTeamsSorted.map(t => `${t.name}: ${t.currentDayPoints}`));
+                    // Find the last or highest-week entry
+                    const latestWeek = team.weeklyStats.reduce((latest, curr) =>
+                        curr.week > latest.week ? curr : latest
+                    );
+
+                    return latestWeek.firstPeriodPoints || 0;
+                };
+
+                const aPoints = getCurrentWeekFirstPoints(a);
+                const bPoints = getCurrentWeekFirstPoints(b);
+
+                return bPoints - aPoints; // descending (highest first)
+            });
+
+
+            console.log(`All teams sorted by points for week ${week}:,  ${allTeamsSorted.map(t => `${t.name}: ${t.currentDayPoints}`)}`);
 
             // Second Period Pools:
-            const premierPool = allTeamsSorted.slice(0, 3);  // Positions 1-3
-            const secondaryPool = allTeamsSorted.slice(3, 6); // Positions 4-6
+            const poolASecondPeriodTeams = allTeamsSorted.slice(0, 3);  // Positions 1-3
+            const poolBSecondPeriodTeams = allTeamsSorted.slice(3, 6); // Positions 4-6
 
-            console.log("Second Period - Premier Pool:", premierPool.map(t => t.name));
-            console.log("Second Period - Secondary Pool:", secondaryPool.map(t => t.name));
+            console.log("Second Period - Premier Pool:", poolASecondPeriodTeams.map(t => t.name));
+            console.log("Second Period - Secondary Pool:", poolBSecondPeriodTeams.map(t => t.name));
 
             return {
                 poolATeams,      // First Period Pool A
                 poolBTeams,      // First Period Pool B  
-                premierPool,     // Second Period Premier Pool
-                secondaryPool    // Second Period Secondary Pool
+                poolASecondPeriodTeams,     // Second Period Premier Pool
+                poolBSecondPeriodTeams    // Second Period Secondary Pool
             };
         } catch (error) {
             console.error("Error calculating pools:", error);
             return {
                 poolATeams: [],
                 poolBTeams: [],
-                premierPool: [],
-                secondaryPool: []
+                poolASecondPeriodTeams: [],
+                poolBSecondPeriodTeams: []
             };
         }
     };
